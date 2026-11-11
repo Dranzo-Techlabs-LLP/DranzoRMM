@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  productbuild distribution for the DranzoRMM agent.
+  build-pkg.sh replaces the __PLACEHOLDERS__; do not use this file directly.
+-->
+<installer-gui-script minSpecVersion="2">
+    <title>DranzoRMM Agent</title>
+    <organization>com.dranzormm</organization>
+    <!-- System-wide install only (LaunchDaemon + /usr/local/bin). -->
+    <domains enable_localSystem="true" enable_anywhere="false" enable_currentUserHome="false"/>
+    <options customize="never" require-scripts="false" hostArchitectures="__HOST_ARCHS__"/>
+    <!-- Taken from the Mach-O header of the agent binary at build time. -->
+    <allowed-os-versions>
+        <os-version min="__MIN_MACOS__"/>
+    </allowed-os-versions>
+    <welcome file="welcome.txt" mime-type="text/plain"/>
+    <readme file="README.txt" mime-type="text/plain"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.dranzormm.agent.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.dranzormm.agent.pkg" visible="false">
+        <pkg-ref id="com.dranzormm.agent.pkg"/>
+    </choice>
+    <pkg-ref id="com.dranzormm.agent.pkg" version="__VERSION__" onConclusion="none">agent-component.pkg</pkg-ref>
+</installer-gui-script>

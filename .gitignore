@@ -1,0 +1,164 @@
+# ---------------------------------------------------------------------------
+# DranzoRMM root .gitignore
+# Rule of thumb: build output, local state and anything that could hold a
+# secret or a private key never enters the repository.
+# ---------------------------------------------------------------------------
+
+# ----- Secrets, keys, certificates (never commit) -----
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
+*.p8
+*.jks
+*.keystore
+*.snk
+*.asc
+*.gpg
+*.kdbx
+*.mobileprovision
+*.provisionprofile
+secrets/
+keystore/
+keystores/
+.keystore/
+.dranzormm-dev/
+dranzo-agent-install.json
+**/trust.local.json
+
+# Public test fixtures that are deliberately committed (see .gitleaks.toml).
+!agent/internal/protocol/testdata/**
+!**/testdata/**/*.pem
+!**/tests/**/Fixtures/**/*.pem
+
+# ----- .NET -----
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+*.trx
+artifacts/
+publish/
+*.nupkg
+*.snupkg
+project.lock.json
+BenchmarkDotNet.Artifacts/
+
+# ----- Node / web -----
+node_modules/
+/web/dist/
+/web/dist-ssr/
+/web/.vite/
+/web/coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.stylelintcache
+playwright-report/
+test-results/
+# The server serves the production web build from wwwroot; it is a build product.
+/server/src/Dranzo.Api/wwwroot/
+
+# ----- Go / agent -----
+/agent/bin/
+/agent/dist/
+/agent/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.txt
+coverage.html
+go.work
+go.work.sum
+/agent/dranzo-agent
+/agent/cmd/dranzo-agent/dranzo-agent
+
+# ----- Installers / packaging output -----
+/dist/
+/installers/**/dist/
+/installers/**/build/
+/installers/**/out/
+/installers/wix/bin/
+/installers/wix/obj/
+*.msi
+*.wixobj
+*.wixpdb
+*.cab
+*.pkg
+*.dmg
+*.deb
+*.rpm
+*.sbom.json
+*.cdx.json
+sbom-*.json
+SHA256SUMS*
+
+# ----- Infrastructure -----
+# Compiled ARM templates and real parameter files (may contain names / IDs).
+/deploy/bicep/*.json
+!/deploy/bicep/bicepconfig.json
+/deploy/bicep/*.local.bicepparam
+/deploy/**/.terraform/
+/deploy/data/
+/deploy/**/volumes/
+docker-compose.override.yml
+
+# ----- Local databases, logs, dumps -----
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.bak
+*.sql.gz
+pgdata/
+minio-data/
+meshcentral-data/
+meshcentral-files/
+
+# ----- OS / editor noise -----
+.DS_Store
+.AppleDouble
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+.direnv/
+.envrc
+
+# ----- Tool caches -----
+.cache/
+.pre-commit-cache/
+.gitleaks-report.json
+gitleaks-report.*
+trivy-report.*
+.claude/
+
+# End-to-end test state (holds a dev-only TOTP seed)
+.e2e-state.json
+**/.e2e-state.json

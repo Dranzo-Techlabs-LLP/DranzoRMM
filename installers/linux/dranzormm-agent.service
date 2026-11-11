@@ -1,0 +1,37 @@
+# DranzoRMM agent - packaged systemd unit.
+#
+# Unit name: the agent registers and manages its own service under the name
+# "dranzormm-agent" (agent/internal/svc/svc_linux.go). The packaged unit MUST use
+# the same name, otherwise `dranzo-agent status`, `dranzo-agent uninstall` and the
+# signed `agent.uninstall` command would not find the service.
+#
+# How the two definitions fit together:
+#   * `dranzo-agent install --server ... --token ...` (the normal enrolment path)
+#     writes /etc/systemd/system/dranzormm-agent.service. Units in /etc take
+#     precedence over this file in /usr/lib, so there is always exactly ONE
+#     service; this file is then simply shadowed.
+#   * This file is what runs when the device is enrolled without that command,
+#     e.g. configuration management drops /etc/dranzormm/bootstrap.json and runs
+#     `systemctl enable --now dranzormm-agent`.
+#   * Restart behaviour and hardening live in the drop-in
+#     dranzormm-agent.service.d/10-hardening.conf, which systemd applies to
+#     whichever of the two definitions is active.
+#
+# Transparency (docs/SPEC.md section 1): this is an ordinary, visible unit. It is
+# listed by `systemctl list-units`, described truthfully and removed with the package.
+
+[Unit]
+Description=DranzoRMM Agent (endpoint management agent installed by your IT provider)
+# Do not crash-loop on a machine that has the package but was never enrolled.
+# "|" makes the conditions alternatives: either file is enough.
+ConditionPathExists=|/etc/dranzormm/bootstrap.json
+ConditionPathExists=|/var/lib/dranzormm/config.json
+
+[Service]
+Type=simple
+# Runs as root: required by docs/SPEC.md section 2 (package installation, patching,
+# inventory of protected state). No User= line on purpose.
+ExecStart=/usr/bin/dranzo-agent run
+
+[Install]
+WantedBy=multi-user.target

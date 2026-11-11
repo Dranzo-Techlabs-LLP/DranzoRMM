@@ -1,0 +1,16 @@
+#!/bin/sh
+# DranzoRMM agent .pkg - preinstall (runs as root before the payload is written).
+#
+# Only one job: refuse cleanly on a macOS version the binary cannot run on.
+# Installer normally enforces this from the distribution file; this also covers
+# `installer -pkg` on a component package and MDM InstallApplication.
+set -eu
+
+MIN_MAJOR="__MIN_MACOS_MAJOR__"
+
+major="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
+if [ "$major" -lt "$MIN_MAJOR" ]; then
+  echo "DranzoRMM agent requires macOS ${MIN_MAJOR} or later (this Mac runs $(/usr/bin/sw_vers -productVersion))." >&2
+  exit 1
+fi
+exit 0

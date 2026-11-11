@@ -1,0 +1,112 @@
+# nfpm (https://nfpm.goreleaser.com) configuration for the DranzoRMM agent
+# .deb and .rpm packages. Do not run nfpm on this file directly: use
+#
+#     installers/linux/build-packages.sh
+#
+# which stages the files next to a copy of this config (nfpm does not expand
+# environment variables in `contents[].src`, so the binary is always staged as
+# ./dranzo-agent) and handles GPG signing.
+#
+# Environment variables expanded by nfpm in this file:
+#   NFPM_ARCH              amd64 | arm64   (nfpm maps them to x86_64 / aarch64 for rpm)
+#   DRANZO_VERSION         semantic version, e.g. 1.4.0 or 0.0.123-dev+abc1234
+#   NFPM_SIGNING_KEY_FILE  path to the ASCII-armoured GPG private key, or empty = unsigned
+#   NFPM_PASSPHRASE        key passphrase (read by nfpm itself, never written to disk)
+
+name: dranzo-agent
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${DRANZO_VERSION}
+version_schema: semver
+# No `release:` on purpose: the file names then match what the dashboard prints
+# (dranzo-agent_<version>_<arch>.deb; rpm gets the default release "1").
+section: admin
+priority: optional
+maintainer: "DranzoRMM Packaging <packaging@example.invalid>" # PLACEHOLDER: set before the first public release
+vendor: "DranzoRMM"
+homepage: "https://example.invalid/dranzormm" # PLACEHOLDER
+license: "Proprietary" # PLACEHOLDER: set to the real licence identifier
+description: |
+  DranzoRMM endpoint management agent.
+  Lets your IT provider monitor, maintain and support this computer:
+  hardware and software inventory, software updates, scripts and remote
+  support. The agent runs as the visible systemd service "dranzormm-agent",
+  only connects outbound to its management server and only executes commands
+  signed by that server. An administrator of this computer can remove it at
+  any time with the system package manager.
+
+# Static Go binary (CGO_ENABLED=0): no library dependencies.
+# systemd is recommended, not required, so the package still installs in containers.
+recommends:
+  - systemd
+
+contents:
+  # The agent. /usr/bin so that `sudo dranzo-agent ...` works with the default secure_path.
+  - src: ./dranzo-agent
+    dst: /usr/bin/dranzo-agent
+    file_info:
+      mode: 0755
+      owner: root
+      group: root
+
+  # Packaged unit + drop-in (see the comments inside both files).
+  - src: ./dranzormm-agent.service
+    dst: /usr/lib/systemd/system/dranzormm-agent.service
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
+  - src: ./10-hardening.conf
+    dst: /usr/lib/systemd/system/dranzormm-agent.service.d/10-hardening.conf
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
+
+  # Bootstrap configuration (server URL + enrolment token until enrolled): root only.
+  - dst: /etc/dranzormm
+    type: dir
+    file_info:
+      mode: 0700
+      owner: root
+      group: root
+
+  # State: device private key, certificate, trust anchors, config, log: root only.
+  - dst: /var/lib/dranzormm
+    type: dir
+    file_info:
+      mode: 0700
+      owner: root
+      group: root
+
+  - src: ./README.package
+    dst: /usr/share/doc/dranzo-agent/README
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
+
+scripts:
+  postinstall: ./scripts/postinstall.sh
+  preremove: ./scripts/preremove.sh
+  postremove: ./scripts/postremove.sh
+
+deb:
+  compression: xz
+  fields:
+    Bugs: "https://example.invalid/dranzormm/support" # PLACEHOLDER
+  signature:
+    # "debsign"-style origin signature stored inside the .deb as _gpgorigin.
+    # Verified by build-packages.sh; apt users normally rely on the signed repository
+    # metadata instead (docs/RUNBOOK.md "Linux package repository").
+    method: debsign
+    type: origin
+    key_file: ${NFPM_SIGNING_KEY_FILE}
+
+rpm:
+  group: Applications/System
+  summary: DranzoRMM endpoint management agent
+  compression: xz
+  signature:
+    # Embedded RPM v4 signature, checked by rpm/dnf when the public key is imported.
+    key_file: ${NFPM_SIGNING_KEY_FILE}

@@ -1,0 +1,7 @@
+This installer adds the DranzoRMM endpoint management agent to this Mac.
+
+The agent lets your IT provider monitor, maintain and support the computer. It runs as a visible system service (LaunchDaemon "com.dranzormm.agent"), only connects to its management server and can be removed at any time by an administrator of this Mac with:
+
+    sudo /Library/DranzoRMM/uninstall.sh
+
+Install it only if your organisation or IT provider asked you to.

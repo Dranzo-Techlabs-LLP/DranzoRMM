@@ -1,0 +1,681 @@
+# DranzoRMM CI: build, test, package, scan.
+#
+# STATUS: this workflow has never run. Only YAML syntax was checked locally (actionlint is
+# not installed on the authoring machine; the workflow-lint job runs it). Everything else
+# (runner images, action inputs, packaging on Windows) is unverified until the first run.
+# See docs/RUNBOOK.md "CI and signing secrets".
+#
+# Conventions
+#   * Every third-party action is pinned to a full commit SHA (version in the comment).
+#     Dependabot (.github/dependabot.yml) keeps SHA and comment in step.
+#   * `permissions: {}` at the top; each job asks for the minimum it needs.
+#   * No `pull_request_target`. Code from a pull request never runs with secrets:
+#     signing secrets live in the GitHub *environment* "release-signing", which the
+#     packaging jobs enter only for pushes to main and version tags.
+#   * Untrusted values (branch names, titles) are never interpolated into `run:`
+#     scripts; they are passed through `env:`.
+#   * Tools without a maintained action are installed with `go install <module>@<version>`:
+#     the version is pinned and the Go checksum database verifies the content.
+#
+# SIGNING RULE (docs/SPEC.md section 8), implemented by the three build scripts:
+#   signing secrets configured  -> packages MUST be signed; any signing failure fails the job
+#   no signing secrets          -> packages are built and a visible "UNSIGNED BUILD"
+#                                  warning annotation is raised; artifact names end in -UNSIGNED
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "26"
+  # Tool versions installed with `go install` (verified by sum.golang.org).
+  NFPM_VERSION: v2.48.0
+  GITLEAKS_VERSION: v8.30.1
+  GOVULNCHECK_VERSION: v1.9.0
+  ACTIONLINT_VERSION: v1.7.12
+  GOLANGCI_LINT_VERSION: v2.15.0
+  TRIVY_VERSION: v0.76.2
+  SYFT_VERSION: v1.57.1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Version: vX.Y.Z tags build X.Y.Z; everything else builds 0.0.<run>-dev+<sha>.
+  # ---------------------------------------------------------------------------
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - id: v
+        env:
+          REF: ${{ github.ref }}
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "version=${BASH_REMATCH[1]}" >>"$GITHUB_OUTPUT"
+            echo "release=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.${RUN_NUMBER}-dev+${SHA:0:7}" >>"$GITHUB_OUTPUT"
+            echo "release=false" >>"$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Server (ASP.NET Core)
+  # ---------------------------------------------------------------------------
+  server:
+    name: Server (build, format, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway credential for the job-local service container only.
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: server/**/packages.lock.json
+      # --locked-mode: fail if packages.lock.json does not match (dependency pinning).
+      - name: Restore (locked)
+        run: dotnet restore DranzoRMM.sln --locked-mode
+      - name: Build (warnings are errors, analyzers on)
+        run: dotnet build DranzoRMM.sln --no-restore --configuration Release
+      - name: Format check
+        run: dotnet format DranzoRMM.sln --verify-no-changes --no-restore
+      - name: Test (PostgreSQL service container)
+        env:
+          DRANZO_TEST_PG: Host=localhost;Port=5432;Username=postgres;Password=postgres
+        run: dotnet test DranzoRMM.sln --no-build --configuration Release --logger "trx;LogFileName=server-tests.trx" --results-directory "$RUNNER_TEMP/test-results"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: server-test-results
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Web dashboard (React + TypeScript + Vite)
+  # ---------------------------------------------------------------------------
+  web:
+    name: Web (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # npm ci installs exactly package-lock.json; --ignore-scripts blocks install-time code
+      # from dependencies (none of the build tooling needs lifecycle scripts).
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Agent: lint and test on the three operating systems it runs on
+  # ---------------------------------------------------------------------------
+  agent-test:
+    name: Agent test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+        working-directory: agent
+    steps:
+      # Keep LF on Windows so gofmt/goimports see the files as committed.
+      - name: Disable CRLF conversion
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - name: go mod verify
+        run: go mod verify
+      - name: gofmt
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: agent
+      # -race needs cgo; all three hosted runner images ship a C toolchain.
+      - name: go test -race
+        run: go test -race -count=1 ./...
+
+  # ---------------------------------------------------------------------------
+  # Agent: cross-compile the six release targets (static, CGO off, -trimpath)
+  # ---------------------------------------------------------------------------
+  agent-build:
+    name: Agent build (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - name: Vet for target
+        working-directory: agent
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go vet ./...
+      - name: Build
+        env:
+          DRANZO_VERSION: ${{ needs.version.outputs.version }}
+          OUT_DIR: dist/agent
+          # PUBLIC trust anchors of the deployment (repository *variables*, not secrets).
+          # Empty = binaries without built-in anchors (install needs --ca-file/--trust-file).
+          DRANZO_EMBED_COMMAND_KEYS: ${{ vars.DRANZO_EMBED_COMMAND_KEYS }}
+          DRANZO_EMBED_CA_PEM_B64: ${{ vars.DRANZO_EMBED_CA_PEM_B64 }}
+          TARGET: ${{ matrix.goos }}/${{ matrix.goarch }}
+        run: scripts/build-agent.sh "$TARGET"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/agent/
+          if-no-files-found: error
+          retention-days: 14
+
+  agent-universal:
+    name: Agent macOS universal binary (lipo)
+    needs: agent-build
+    runs-on: macos-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: agent-darwin-*
+          path: dist/agent
+          merge-multiple: true
+      - name: lipo
+        run: |
+          set -euo pipefail
+          cd dist/agent
+          lipo -create -output dranzo-agent-darwin-universal dranzo-agent-darwin-amd64 dranzo-agent-darwin-arm64
+          lipo -info dranzo-agent-darwin-universal
+          lipo dranzo-agent-darwin-universal -verify_arch x86_64 arm64
+          chmod 0755 dranzo-agent-darwin-universal
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-darwin-universal
+          path: dist/agent/dranzo-agent-darwin-universal
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Packaging. Secrets come from the "release-signing" environment and are only
+  # reachable from pushes to main and version tags (never from pull requests).
+  # ---------------------------------------------------------------------------
+  package-linux:
+    name: Package Linux deb+rpm (${{ matrix.arch }})
+    needs: [version, agent-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    environment: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) && 'release-signing' || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache: false
+      - name: Install nfpm and rpm tools
+        run: |
+          set -euo pipefail
+          go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends rpm binutils gnupg
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: agent-linux-${{ matrix.arch }}
+          path: dist/agent
+      - name: Build (and sign when configured)
+        id: build
+        env:
+          # PLACEHOLDER secret names; see docs/RUNBOOK.md "CI and signing secrets".
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          DRANZO_VERSION: ${{ needs.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          if [ -n "$GPG_PRIVATE_KEY" ]; then echo "suffix=signed" >>"$GITHUB_OUTPUT"; else echo "suffix=UNSIGNED" >>"$GITHUB_OUTPUT"; fi
+          installers/linux/build-packages.sh --arch "$ARCH" \
+            --binary "dist/agent/dranzo-agent-linux-$ARCH" --version "$DRANZO_VERSION" --out dist/linux
+      - name: Summary
+        env:
+          SUFFIX: ${{ steps.build.outputs.suffix }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          if [ "$SUFFIX" = UNSIGNED ]; then
+            echo "### :warning: UNSIGNED BUILD: Linux packages ($ARCH) are not GPG-signed" >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Linux packages ($ARCH): GPG-signed and verified" >>"$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages-linux-${{ matrix.arch }}-${{ steps.build.outputs.suffix }}
+          path: dist/linux/
+          if-no-files-found: error
+          retention-days: 30
+
+  package-macos:
+    name: Package macOS pkg
+    needs: [version, agent-universal]
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    environment: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) && 'release-signing' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: agent-darwin-universal
+          path: dist/agent
+      - name: Import signing identities (no-op without secrets, fails if partial)
+        id: signing
+        env:
+          # PLACEHOLDER secret names; see docs/RUNBOOK.md "CI and signing secrets".
+          APPLE_DEVELOPER_ID_APPLICATION_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_INSTALLER_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_P12_BASE64 }}
+          APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APPLE_DEVELOPER_ID_APPLICATION_P12_BASE64}${APPLE_DEVELOPER_ID_INSTALLER_P12_BASE64}${APPLE_P12_PASSWORD}${APPLE_NOTARY_KEY_P8_BASE64}${APPLE_NOTARY_KEY_ID}${APPLE_NOTARY_ISSUER_ID}" ]; then
+            echo "suffix=signed" >>"$GITHUB_OUTPUT"
+          else
+            echo "suffix=UNSIGNED" >>"$GITHUB_OUTPUT"
+          fi
+          installers/macos/ci-import-signing.sh setup
+      - name: Build (sign, notarise and staple when configured)
+        env:
+          DRANZO_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          chmod 0755 dist/agent/dranzo-agent-darwin-universal
+          installers/macos/build-pkg.sh --binary dist/agent/dranzo-agent-darwin-universal \
+            --version "$DRANZO_VERSION" --out dist/macos
+          pkgutil --payload-files dist/macos/DranzoAgent.pkg
+          pkgutil --check-signature dist/macos/DranzoAgent.pkg || true
+      - name: Remove signing material
+        if: always()
+        run: installers/macos/ci-import-signing.sh cleanup
+      - name: Summary
+        env:
+          SUFFIX: ${{ steps.signing.outputs.suffix }}
+        run: |
+          if [ "$SUFFIX" = UNSIGNED ]; then
+            echo "### :warning: UNSIGNED BUILD: macOS package is not signed or notarised" >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "### macOS package: signed, notarised, stapled" >>"$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages-macos-${{ steps.signing.outputs.suffix }}
+          path: dist/macos/
+          if-no-files-found: error
+          retention-days: 30
+
+  package-windows:
+    name: Package Windows MSI (${{ matrix.arch }})
+    needs: [version, agent-build]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    environment: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) && 'release-signing' || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, goarch: amd64 }
+          - { arch: arm64, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The WiX CLI is a .NET tool (installed, pinned, by build.ps1).
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: agent-windows-${{ matrix.goarch }}
+          path: dist/agent
+      - name: Build (and Authenticode-sign when configured)
+        id: build
+        shell: pwsh
+        env:
+          # PLACEHOLDER secret names; see docs/RUNBOOK.md "CI and signing secrets".
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+          DRANZO_VERSION: ${{ needs.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $suffix = if ($env:WINDOWS_CERT_PFX_BASE64 -or $env:WINDOWS_CERT_PASSWORD) { 'signed' } else { 'UNSIGNED' }
+          "suffix=$suffix" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          ./installers/wix/build.ps1 -Arch $env:ARCH -AgentBinary "dist/agent/dranzo-agent-windows-$($env:GOARCH).exe" -Version $env:DRANZO_VERSION -OutDir dist/windows
+          if ($suffix -eq 'UNSIGNED') {
+            "### :warning: UNSIGNED BUILD: Windows agent and MSI ($($env:ARCH)) are not Authenticode-signed" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            "### Windows MSI ($($env:ARCH)): Authenticode-signed and verified" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages-windows-${{ matrix.arch }}-${{ steps.build.outputs.suffix }}
+          path: dist/windows/
+          if-no-files-found: error
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # Supply chain: secrets, known vulnerabilities, SBOMs
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # scan the whole history, not only the tip
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache: false
+      - name: Install gitleaks
+        run: go install "github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION}"
+      - name: Scan git history
+        run: gitleaks git --config .gitleaks.toml --redact --verbose --no-banner .
+      - name: Scan working tree (catches files git does not track yet)
+        run: gitleaks dir --config .gitleaks.toml --redact --verbose --no-banner .
+
+  vulnerability-scan:
+    name: Dependency vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Go: reports only vulnerabilities in code paths the agent actually calls,
+      # checked for each OS because the per-OS files differ.
+      - name: govulncheck (agent, all three OSes)
+        working-directory: agent
+        run: |
+          set -euo pipefail
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          for os in linux windows darwin; do
+            echo "::group::govulncheck GOOS=$os"
+            GOOS="$os" govulncheck ./...
+            echo "::endgroup::"
+          done
+
+      # NuGet: the command exits 0 even with findings, so the output is checked.
+      - name: dotnet list package --vulnerable (server)
+        working-directory: server
+        run: |
+          set -euo pipefail
+          dotnet restore DranzoRMM.sln --locked-mode
+          dotnet list DranzoRMM.sln package --vulnerable --include-transitive 2>&1 | tee "$RUNNER_TEMP/nuget-vulnerable.txt"
+          if grep -q "has the following vulnerable packages" "$RUNNER_TEMP/nuget-vulnerable.txt"; then
+            echo "::error title=Vulnerable NuGet packages::See the step log for the list."
+            exit 1
+          fi
+          # A failed query must not look like a clean result.
+          grep -q "has no vulnerable packages" "$RUNNER_TEMP/nuget-vulnerable.txt" \
+            || { echo "::error::could not determine NuGet vulnerability status"; exit 1; }
+
+      - name: npm audit (web, high and critical)
+        working-directory: web
+        run: npm audit --audit-level=high
+
+      # Lock files, Dockerfiles and IaC in one pass (vulnerabilities + misconfiguration).
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+  sbom:
+    name: SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, web, agent]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generate SBOM with syft
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
+          path: ${{ matrix.component }}
+          format: cyclonedx-json
+          output-file: sbom-${{ matrix.component }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.component }}
+          path: sbom-${{ matrix.component }}.cdx.json
+          if-no-files-found: error
+          retention-days: 90
+
+  workflow-lint:
+    name: Workflow lint (actionlint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache: false
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+          actionlint -color
+      - name: Every action is pinned to a commit SHA
+        run: |
+          set -euo pipefail
+          bad="$(grep -rnE '^\s*-?\s*uses:\s*[^#]+@' .github/workflows | grep -vE 'uses:\s*\./' | grep -vE '@[0-9a-f]{40}(\s|$)' || true)"
+          if [ -n "$bad" ]; then echo "Unpinned actions:"; echo "$bad"; exit 1; fi
+      - name: Shell scripts parse
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-agent.sh installers/linux/build-packages.sh installers/macos/build-pkg.sh installers/macos/ci-import-signing.sh
+          for f in installers/linux/scripts/*.sh installers/macos/scripts/* installers/macos/uninstall.sh; do sh -n "$f"; done
+
+  # ---------------------------------------------------------------------------
+  # End to end: the Docker Compose stack plus scripts/e2e.sh (enrols a containerised
+  # Linux agent and runs a script). Both files are maintained by the server owner.
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: End-to-end (docker compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      COMPOSE_FILE: deploy/docker-compose.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and start the stack
+        run: docker compose up --build --detach
+      - name: Run end-to-end test
+        run: scripts/e2e.sh
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --no-color --tail 400
+      # Container vulnerability scan of every image the compose file BUILDS
+      # (third-party images such as postgres are their vendors' responsibility,
+      # and Dependabot tracks their tags).
+      - name: Install Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          # This step only puts the pinned trivy binary on PATH; the gating
+          # misconfiguration scan is the filesystem scan in "vulnerability-scan".
+          scan-type: config
+          scan-ref: deploy
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+      - name: Trivy image scan (locally built images)
+        run: |
+          set -euo pipefail
+          command -v trivy >/dev/null || { echo "::error::trivy is not on PATH after trivy-action"; exit 1; }
+          images="$(docker compose config --format json | jq -r '. as $c | $c.services | to_entries[] | select(.value.build != null) | (.value.image // ($c.name + "-" + .key))')"
+          [ -n "$images" ] || { echo "::error::no locally built images found in the compose file"; exit 1; }
+          rc=0
+          for image in $images; do
+            echo "::group::trivy image $image"
+            trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$image" || rc=1
+            echo "::endgroup::"
+          done
+          exit "$rc"
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans

@@ -1,0 +1,97 @@
+#!/bin/sh
+# DranzoRMM agent .pkg - postinstall (runs as root after the payload is written).
+# Output goes to /var/log/install.log.
+#
+#   * Upgrade (daemon already registered): restart it on the new binary.
+#   * First install with /tmp/dranzo-agent-install.json present: enrol by calling
+#     `dranzo-agent install`, which writes the bootstrap configuration, registers
+#     the LaunchDaemon com.dranzormm.agent and starts it.
+#   * First install without that file: leave the agent installed but NOT
+#     enrolled and not running, until an administrator runs `dranzo-agent install`.
+#
+# Parameter file (optional), JSON:
+#   { "serverUrl": "https://agents.example.com",
+#     "token":     "dz_enroll_...",
+#     "caFile":    "/path/to/ca.pem",        (optional, with trustFile)
+#     "trustFile": "/path/to/trust.json" }   (optional, with caFile)
+#
+# SECURITY: /tmp is world-writable. Whoever controls this file chooses the server
+# that may run commands as root on this Mac, so it is honoured ONLY when it is a
+# regular file (not a symlink) owned by root and not writable by group or others.
+# A file planted by an unprivileged user is ignored and reported.
+set -u
+
+LABEL="com.dranzormm.agent"
+PLIST="/Library/LaunchDaemons/${LABEL}.plist"
+AGENT="/usr/local/bin/dranzo-agent"
+PARAMS="/tmp/dranzo-agent-install.json"
+
+log() { echo "dranzo-agent postinstall: $*"; }
+
+json_get() { # json_get <key>  -> value or empty
+  /usr/bin/plutil -extract "$1" raw -o - "$PARAMS" 2>/dev/null || true
+}
+
+params_trusted() {
+  [ -f "$PARAMS" ] && [ ! -L "$PARAMS" ] || return 1
+  owner="$(/usr/bin/stat -f '%u' "$PARAMS")"
+  perms="$(/usr/bin/stat -f '%Lp' "$PARAMS")"
+  [ "$owner" = "0" ] || { log "ignoring $PARAMS: not owned by root"; return 1; }
+  case "$perms" in
+    600|400|640|440|644|444) return 0 ;;   # no write bit for group or others
+    *) log "ignoring $PARAMS: mode $perms is writable by group or others"; return 1 ;;
+  esac
+}
+
+/usr/sbin/chown root:wheel "$AGENT"
+/bin/chmod 0755 "$AGENT"
+
+if [ -f "$PLIST" ]; then
+  # Upgrade: the daemon definition belongs to the agent; just restart the job so
+  # it runs the binary that was just installed.
+  if /bin/launchctl print "system/${LABEL}" >/dev/null 2>&1; then
+    /bin/launchctl kickstart -k "system/${LABEL}" >/dev/null 2>&1 || log "could not restart ${LABEL}"
+    log "restarted ${LABEL} on the new version"
+  else
+    /bin/launchctl bootstrap system "$PLIST" >/dev/null 2>&1 || log "could not load ${LABEL}"
+  fi
+  if [ -e "$PARAMS" ] || [ -L "$PARAMS" ]; then
+    log "this Mac is already registered; $PARAMS was not used"
+    /bin/rm -f "$PARAMS"
+  fi
+  exit 0
+fi
+
+if [ -e "$PARAMS" ] || [ -L "$PARAMS" ]; then
+  if params_trusted; then
+    server="$(json_get serverUrl)"
+    token="$(json_get token)"
+    ca_file="$(json_get caFile)"
+    trust_file="$(json_get trustFile)"
+    # The file holds an enrolment token: remove it whatever happens next.
+    /bin/rm -f "$PARAMS"
+    if [ -z "$server" ] || [ -z "$token" ]; then
+      log "WARNING: parameter file had no serverUrl/token; agent is installed but NOT enrolled"
+      exit 0
+    fi
+    set -- install --server "$server"
+    if [ -n "$ca_file" ] && [ -n "$trust_file" ]; then
+      set -- "$@" --ca-file "$ca_file" --trust-file "$trust_file"
+    fi
+    # Token through the environment, not argv, so it is not visible in `ps`.
+    if DRANZO_ENROLL_TOKEN="$token" "$AGENT" "$@"; then
+      log "enrolled with $server and started ${LABEL}"
+    else
+      # Do not fail the package: the payload is installed and enrolment can be retried.
+      log "WARNING: enrolment failed; agent is installed but NOT enrolled."
+      log "retry: sudo $AGENT install --server URL --token TOKEN"
+    fi
+    exit 0
+  fi
+  # Untrusted file: leave it alone (it is not ours to delete) and do not enrol.
+  log "WARNING: $PARAMS was ignored; agent is installed but NOT enrolled"
+  exit 0
+fi
+
+log "installed. Not enrolled yet: sudo $AGENT install --server URL --token TOKEN"
+exit 0

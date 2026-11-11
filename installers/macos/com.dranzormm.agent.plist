@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  DranzoRMM agent LaunchDaemon: REFERENCE definition.
+
+  Label / file name: the agent registers its own daemon under the label
+  "com.dranzormm.agent" (agent/internal/svc/svc_darwin.go) and writes
+  /Library/LaunchDaemons/com.dranzormm.agent.plist when `dranzo-agent install`
+  runs. This file documents the same job and is NOT placed in
+  /Library/LaunchDaemons by the .pkg, because the agent's installer refuses to
+  run when a definition already exists there (see installers/macos/README.md,
+  "Daemon ownership"). build-pkg.sh lints it and installs a copy as
+  /Library/DranzoRMM/com.dranzormm.agent.plist for administrators and MDM
+  authors who need the exact job definition.
+
+  The daemon is an ordinary, visible launchd job: it is listed by
+  `sudo launchctl print system/com.dranzormm.agent` and in
+  System Settings > General > Login Items & Extensions, and it is removed by
+  /Library/DranzoRMM/uninstall.sh.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.dranzormm.agent</string>
+
+	<!-- Runs as root (no UserName key): required by docs/SPEC.md section 2. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/dranzo-agent</string>
+		<string>run</string>
+	</array>
+
+	<!-- Start at boot and restart whenever the agent exits (crash, self-update). -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+
+	<!-- Minimum seconds between restarts, so a failing agent cannot spin. -->
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+
+	<!-- Not tied to a login session; the agent talks to user sessions explicitly
+	     (launchctl asuser) when a job or a consent prompt needs one. -->
+	<key>SessionCreate</key>
+	<false/>
+
+	<key>Disabled</key>
+	<false/>
+
+	<!-- The agent keeps its own rotated log in
+	     /Library/Application Support/DranzoRMM/agent.log (root only). Anything it
+	     prints unexpectedly ends up here. -->
+	<key>StandardOutPath</key>
+	<string>/var/log/com.dranzormm.agent.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/com.dranzormm.agent.err.log</string>
+</dict>
+</plist>

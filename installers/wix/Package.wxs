@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DranzoRMM agent - Windows Installer package (WiX v4/v5 schema).
+
+  NOT BUILT LOCALLY: WiX only runs on Windows and this file was written on macOS.
+  It has been checked for XML well-formedness only. Build with installers/wix/build.ps1
+  on Windows (CI: windows-latest) and test on a VM before relying on it.
+
+  Build variables (wix build -d Name=Value):
+    ProductVersion   numeric X.Y.Z (each part <= 255/255/65535)
+    AgentBinary      path to dranzo-agent.exe for the target architecture
+  Architecture comes from `wix build -arch x64|arm64`.
+
+  Design: THE AGENT OWNS THE WINDOWS SERVICE.
+    `dranzo-agent.exe install` registers the service "DranzoRMMAgent" (display name
+    "DranzoRMM Agent", LocalSystem, automatic start, restart 5 s after a failure:
+    agent/internal/svc/svc_windows.go) and refuses to run if it already exists. The MSI
+    therefore has no ServiceInstall element; it copies the binary, calls the agent to
+    enrol when SERVERURL and ENROLLTOKEN are given, and calls the agent to deregister on
+    uninstall. A ServiceInstall here would make `dranzo-agent.exe install` fail.
+
+  Public properties (msiexec /i DranzoAgent-x64.msi /qn NAME=value ...):
+    SERVERURL      https://host[:port] of the agent listener
+    ENROLLTOKEN    dz_enroll_... (hidden: never written to MSI logs)
+    CAFILE         optional path to the pinned CA bundle (PEM); with TRUSTFILE
+    TRUSTFILE      optional path to trust.json (command-signing public keys); with CAFILE
+    UNINSTALLCODE  uninstall code, when the IT provider set one (hidden); used on removal
+    REMOVEDATA     1 = also delete C:\ProgramData\DranzoRMM on uninstall (default: keep)
+
+  Transparency: the product is listed in Apps and features / Programs and Features under
+  its real name and publisher, the service is a normal visible service, and nothing here
+  sets ARPSYSTEMCOMPONENT or ARPNOREMOVE.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <!--
+    UpgradeCode identifies the product family for upgrades. NEVER change it.
+    (ProductCode is generated per build, which is what MajorUpgrade needs.)
+  -->
+  <Package Name="DranzoRMM Agent"
+           Manufacturer="DranzoRMM"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="FF68C6C5-DFCE-404A-ACA8-47CBD88055EB"
+           Language="1033"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="DranzoRMM endpoint management agent"
+                        Manufacturer="DranzoRMM" />
+
+    <!--
+      Every release is a major upgrade: the old version is removed first, then the new one
+      is installed. Custom actions below use UPGRADINGPRODUCTCODE / WIX_UPGRADE_DETECTED so
+      that an upgrade neither deregisters the service nor enrols again.
+    -->
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="A newer version of DranzoRMM Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- ===== Apps and features entry (visible, removable) ===== -->
+    <Property Id="ARPCOMMENTS" Value="Endpoint management agent installed by your IT provider. An administrator of this computer can remove it here." />
+    <Property Id="ARPCONTACT" Value="Your IT provider" />
+    <!-- PLACEHOLDER URLs: replace before the first public release. -->
+    <Property Id="ARPURLINFOABOUT" Value="https://example.invalid/dranzormm" />
+    <Property Id="ARPHELPLINK" Value="https://example.invalid/dranzormm/support" />
+    <!-- There is nothing to configure through "Modify". -->
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- ===== Public properties =====
+         Secure="yes": passed from the client to the elevated server side of the installation.
+         Hidden="yes": value replaced by ******** in verbose MSI logs. -->
+    <Property Id="SERVERURL" Secure="yes" />
+    <Property Id="ENROLLTOKEN" Secure="yes" Hidden="yes" />
+    <Property Id="CAFILE" Secure="yes" />
+    <Property Id="TRUSTFILE" Secure="yes" />
+    <Property Id="UNINSTALLCODE" Secure="yes" Hidden="yes" />
+    <Property Id="REMOVEDATA" Secure="yes" />
+    <!-- Derived command-line fragments (set below). The code fragment is hidden too. -->
+    <Property Id="DRANZO_CODE_ARG" Hidden="yes" />
+
+    <!-- ===== Searches ===== -->
+    <!-- MSI reports VersionNT=603 on every Windows 10/11, so read the real build number. -->
+    <Property Id="DRANZO_WINBUILD">
+      <RegistrySearch Id="FindWindowsBuild" Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber" Type="raw" />
+    </Property>
+    <!-- Is the agent's service registered? `dranzo-agent.exe uninstall` fails on Windows when
+         it is not, and an MSI that cannot be uninstalled is unacceptable. -->
+    <Property Id="DRANZO_SERVICE_PRESENT">
+      <RegistrySearch Id="FindAgentService" Root="HKLM"
+                      Key="SYSTEM\CurrentControlSet\Services\DranzoRMMAgent"
+                      Name="ImagePath" Type="raw" />
+    </Property>
+
+    <!-- ===== Launch conditions ===== -->
+    <!-- Windows 10 1607 / Server 2016 (build 14393) or later: docs/SPEC.md section 2. -->
+    <Launch Condition="Installed OR (DRANZO_WINBUILD &gt;= 14393)"
+            Message="DranzoRMM Agent requires Windows 10, Windows 11 or Windows Server 2016 or later." />
+    <Launch Condition="Installed OR (SERVERURL AND ENROLLTOKEN) OR (NOT SERVERURL AND NOT ENROLLTOKEN)"
+            Message="SERVERURL and ENROLLTOKEN must be given together (or neither, to install without enrolling)." />
+    <!-- "&lt;&lt;" is the MSI "starts with" operator. -->
+    <Launch Condition="Installed OR (NOT SERVERURL) OR (SERVERURL &lt;&lt; &quot;https://&quot;)"
+            Message="SERVERURL must start with https://" />
+    <Launch Condition="Installed OR (CAFILE AND TRUSTFILE) OR (NOT CAFILE AND NOT TRUSTFILE)"
+            Message="CAFILE and TRUSTFILE must be given together." />
+
+    <!-- ===== Files ===== -->
+    <!-- ProgramFiles6432Folder = "C:\Program Files" for the package architecture (x64 / arm64). -->
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="DranzoRMM">
+        <Component Id="AgentExecutable">
+          <File Id="AgentExe" Source="$(var.AgentBinary)" Name="dranzo-agent.exe" KeyPath="yes" />
+          <!--
+            Stop the agent's service before its executable is replaced (upgrade, repair) or
+            removed (uninstall). Stop only: the service is created and deleted by the agent.
+            Windows Installer skips a service that does not exist.
+          -->
+          <ServiceControl Id="StopAgentService" Name="DranzoRMMAgent" Stop="both" Wait="yes" />
+        </Component>
+        <Component Id="AgentReadme">
+          <File Id="ReadmeTxt" Source="README.txt" Name="README.txt" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="DranzoRMM Agent" Level="1" AllowAbsent="no">
+      <ComponentRef Id="AgentExecutable" />
+      <ComponentRef Id="AgentReadme" />
+    </Feature>
+
+    <!-- ===== Command-line fragments (immediate; resolved into the deferred actions below) ===== -->
+    <SetProperty Id="DRANZO_TRUST_ARGS"
+                 Value=" --ca-file &quot;[CAFILE]&quot; --trust-file &quot;[TRUSTFILE]&quot;"
+                 Sequence="execute" Before="InstallInitialize"
+                 Condition="CAFILE AND TRUSTFILE" />
+    <SetProperty Id="DRANZO_KEEPDATA_ARG" Value=" --keep-data"
+                 Sequence="execute" Before="InstallInitialize"
+                 Condition="NOT (REMOVEDATA = &quot;1&quot;)" />
+    <SetProperty Id="DRANZO_CODE_ARG" Value=" --code &quot;[UNINSTALLCODE]&quot;"
+                 Sequence="execute" Before="InstallInitialize"
+                 Condition="UNINSTALLCODE" />
+
+    <!-- ===== Custom actions =====
+         All run deferred, as LocalSystem (Impersonate="no"), and call either the agent
+         itself or sc.exe/cmd.exe from System32 with fixed arguments. HideTarget keeps the
+         command line (it contains the enrolment token / uninstall code) out of MSI logs.
+         Plain EXE custom actions are used on purpose: no extension DLLs to trust. -->
+
+    <!-- First install with parameters: write bootstrap config, register and start the service. -->
+    <CustomAction Id="EnrollAgent" FileRef="AgentExe"
+                  ExeCommand="install --server &quot;[SERVERURL]&quot; --token &quot;[ENROLLTOKEN]&quot;[DRANZO_TRUST_ARGS]"
+                  Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
+    <!-- If the installation fails after EnrollAgent succeeded, do not leave a service behind. -->
+    <CustomAction Id="RollbackEnrollAgent" FileRef="AgentExe" ExeCommand="uninstall"
+                  Execute="rollback" Impersonate="no" Return="ignore" />
+
+    <!-- Upgrade / repair: the service was stopped above; start it on the new binary.
+         Ignored when the service does not exist (installed but never enrolled). -->
+    <CustomAction Id="StartAgentService" Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[System64Folder]sc.exe&quot; start DranzoRMMAgent"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <!-- Uninstall: the agent checks the uninstall code, stops and deletes its service and,
+         unless told to keep it, its data. A refusal (wrong or missing code) fails the
+         uninstall, which Windows Installer then rolls back. -->
+    <CustomAction Id="UnregisterAgent" FileRef="AgentExe"
+                  ExeCommand="uninstall[DRANZO_KEEPDATA_ARG][DRANZO_CODE_ARG]"
+                  Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
+
+    <!-- REMOVEDATA=1: remove whatever is left of the data directory (fixed path; rd does not
+         follow junctions). Runs after UnregisterAgent, so the uninstall code was checked. -->
+    <CustomAction Id="RemoveAgentData" Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[System64Folder]cmd.exe&quot; /c rd /s /q &quot;[CommonAppDataFolder]DranzoRMM&quot;"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <!-- Uninstall (not the removal half of a major upgrade). After StopServices, before
+           the executable is deleted. -->
+      <Custom Action="UnregisterAgent" After="StopServices"
+              Condition="(REMOVE = &quot;ALL&quot;) AND (NOT UPGRADINGPRODUCTCODE) AND DRANZO_SERVICE_PRESENT" />
+      <Custom Action="RemoveAgentData" After="UnregisterAgent"
+              Condition="(REMOVE = &quot;ALL&quot;) AND (NOT UPGRADINGPRODUCTCODE) AND (REMOVEDATA = &quot;1&quot;)" />
+
+      <!-- First install with enrolment parameters. Never on upgrade: the existing
+           registration and device identity continue. -->
+      <Custom Action="RollbackEnrollAgent" After="InstallFiles"
+              Condition="(NOT Installed) AND (NOT WIX_UPGRADE_DETECTED) AND SERVERURL AND ENROLLTOKEN" />
+      <Custom Action="EnrollAgent" After="RollbackEnrollAgent"
+              Condition="(NOT Installed) AND (NOT WIX_UPGRADE_DETECTED) AND SERVERURL AND ENROLLTOKEN" />
+
+      <!-- Upgrade or repair of an enrolled agent. -->
+      <Custom Action="StartAgentService" After="EnrollAgent"
+              Condition="(NOT (REMOVE = &quot;ALL&quot;)) AND (Installed OR WIX_UPGRADE_DETECTED) AND DRANZO_SERVICE_PRESENT" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>

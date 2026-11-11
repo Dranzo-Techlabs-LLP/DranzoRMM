@@ -1,0 +1,37 @@
+DranzoRMM agent
+===============
+
+This computer has the DranzoRMM endpoint management agent installed. It lets
+your IT provider monitor, maintain and support the computer: hardware and
+software inventory, software and security updates, scripts and remote support.
+
+What it does and does not do
+  * It runs as the ordinary, visible systemd service "dranzormm-agent" (as root).
+  * It only makes outbound connections to its management server and only
+    executes commands signed by that server.
+  * It does not hide itself, does not interfere with antivirus or EDR software,
+    and shows a visible indicator whenever a remote session is active.
+
+Useful commands
+  Status           sudo dranzo-agent status
+                   systemctl status dranzormm-agent
+  Enrol            sudo dranzo-agent install --server https://AGENT-SERVER --token dz_enroll_...
+  Log              /var/lib/dranzormm/agent.log   (root only)
+                   journalctl -u dranzormm-agent
+
+Removing the agent (any administrator of this computer can do this)
+  Debian/Ubuntu    sudo apt remove dranzo-agent      (keeps the device identity)
+                   sudo apt purge dranzo-agent       (also deletes the device identity)
+  RHEL/Fedora      sudo dnf remove dranzo-agent      (deletes the device identity)
+
+  If your IT provider protects the agent with an uninstall code:
+                   sudo dranzo-agent uninstall --code XXXX
+  and then remove the package as above.
+
+Files
+  /usr/bin/dranzo-agent                                   the agent
+  /usr/lib/systemd/system/dranzormm-agent.service         packaged service unit
+  /usr/lib/systemd/system/dranzormm-agent.service.d/      service settings (drop-in)
+  /etc/systemd/system/dranzormm-agent.service             written by "dranzo-agent install"
+  /etc/dranzormm/                                         bootstrap configuration (root only)
+  /var/lib/dranzormm/                                     device key, certificate, state, log (root only)
