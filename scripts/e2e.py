@@ -140,13 +140,14 @@ def main():
 
     api = Api(args.dashboard)
     print("DranzoRMM end-to-end test against", args.dashboard)
-    wait_for("the dashboard API", lambda: api.call("GET", "/healthz", ok=(200,))[0] == 200, timeout=180)
+    # Works directly against the server and through the web container (which proxies only /api and /hubs).
+    wait_for("the dashboard API", lambda: api.call("GET", "/api/v1/auth/me", ok=None, raw=True)[0] == 401, timeout=180)
     step("server is healthy")
 
     status, _, headers = api.call("GET", "/api/v1/devices", ok=None, raw=True)
     assert status == 401, f"anonymous API access should be 401, got {status}"
     assert "nosniff" in (headers.get("X-Content-Type-Options") or ""), "security headers missing"
-    assert api.call("POST", "/agent/v1/enroll", {"token": "x"}, ok=None)[0] == 404, "agent endpoints must not be on the dashboard listener"
+    assert api.call("POST", "/agent/v1/enroll", {"token": "x"}, ok=None, raw=True)[0] in (404, 405), "agent endpoints must not be on the dashboard listener"
     step("anonymous access denied; agent gateway not exposed on the dashboard listener")
 
     api.login(email, password, pathlib.Path(args.state))

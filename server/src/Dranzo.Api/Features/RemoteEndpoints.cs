@@ -112,7 +112,7 @@ public static class RemoteEndpoints
             var total = await q.CountAsync(ct);
             var items = await q.OrderByDescending(s => s.RequestedAt).Skip(skip).Take(take).Select(s => new
             {
-                s.Id, s.DeviceId, hostname = s.Device.Hostname, s.OrganizationId, s.UserId, s.UserName, s.Kind, consent = s.ConsentMode.ToString().ToLower(), state = s.State.ToString().ToLower(),
+                s.Id, s.DeviceId, hostname = s.Device.Hostname, s.OrganizationId, s.UserId, s.UserName, s.Kind, consent = s.ConsentMode.ToString().ToLower(), state = s.State == RemoteSessionState.PendingConsent ? "pending_consent" : s.State.ToString().ToLower(),
                 s.ConsentResult, s.EndReason, s.RequestedAt, s.StartedAt, s.EndedAt, s.Ip, s.BytesIn, s.BytesOut,
             }).ToListAsync(ct);
             return Results.Ok(new { total, page = p, pageSize = take, items });
@@ -123,7 +123,7 @@ public static class RemoteEndpoints
             var s = await c.Db.RemoteSessions.AsNoTracking().Include(x => x.Device).FirstOrDefaultAsync(x => x.Id == id, ct);
             return s is null ? Api.NotFound() : Results.Ok(new
             {
-                s.Id, s.DeviceId, hostname = s.Device.Hostname, s.OrganizationId, s.UserId, s.UserName, s.Kind, consent = s.ConsentMode.ToString().ToLower(), state = s.State.ToString().ToLower(),
+                s.Id, s.DeviceId, hostname = s.Device.Hostname, s.OrganizationId, s.UserId, s.UserName, s.Kind, consent = s.ConsentMode.ToString().ToLower(), state = s.State == RemoteSessionState.PendingConsent ? "pending_consent" : s.State.ToString().ToLower(),
                 s.ConsentResult, s.EndReason, s.RequestedAt, s.StartedAt, s.EndedAt, s.BytesIn, s.BytesOut, s.InputSha256, mine = s.UserId == c.Who.UserId,
             });
         }).RequirePermission(Permissions.SessionsRead);

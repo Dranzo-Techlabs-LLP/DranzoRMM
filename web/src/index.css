@@ -1,0 +1,207 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/atkinson-hyperlegible-next/wght.css';
+@import '@fontsource-variable/atkinson-hyperlegible-mono/index.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens.
+ * Principle: the chrome is ink on paper; colour is reserved for device and action state.
+ * Every status colour is paired with a shape and a text label (see components/status.tsx).
+ */
+:root {
+  --radius: 0.375rem;
+
+  --background: #f5f6f8;
+  --foreground: #17212b;
+  --card: #ffffff;
+  --card-foreground: #17212b;
+  --popover: #ffffff;
+  --popover-foreground: #17212b;
+  --primary: #1b2733;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ecf0;
+  --secondary-foreground: #17212b;
+  --muted: #eceef2;
+  --muted-foreground: #556170;
+  --accent: #e6e9ee;
+  --accent-foreground: #17212b;
+  --destructive: #b92d1c;
+  --border: #d9dee5;
+  /* Control outlines meet 3:1 against the surface they sit on (WCAG 1.4.11). */
+  --input: #8792a0;
+  --ring: #2a5bd7;
+  --link: #1f4fc4;
+
+  --sidebar: #eceef2;
+  --sidebar-foreground: #2b3744;
+  --sidebar-active: #ffffff;
+  --sidebar-border: #d9dee5;
+
+  --ok: #17794a;
+  --ok-mark: #1f9d60;
+  --ok-surface: #e3f4ea;
+  --warn: #8a5300;
+  --warn-mark: #d18700;
+  --warn-surface: #fbefd6;
+  --danger: #b92d1c;
+  --danger-mark: #d5402d;
+  --danger-surface: #fbe6e2;
+  --idle: #556170;
+  --idle-mark: #8490a0;
+  --idle-surface: #e9ecf0;
+  --info: #1f4fc4;
+  --info-surface: #e4ebfb;
+}
+
+.dark {
+  --background: #0f151b;
+  --foreground: #e4e9ee;
+  --card: #151d25;
+  --card-foreground: #e4e9ee;
+  --popover: #18212b;
+  --popover-foreground: #e4e9ee;
+  --primary: #e4e9ee;
+  --primary-foreground: #10171e;
+  --secondary: #1f2a35;
+  --secondary-foreground: #e4e9ee;
+  --muted: #1a242e;
+  --muted-foreground: #9aa7b5;
+  --accent: #212d39;
+  --accent-foreground: #e4e9ee;
+  --destructive: #e2604f;
+  --border: #26323e;
+  --input: #5f6f80;
+  --ring: #7ea4ff;
+  --link: #8fb0ff;
+
+  --sidebar: #0b1015;
+  --sidebar-foreground: #b9c4cf;
+  --sidebar-active: #1a242e;
+  --sidebar-border: #1d2731;
+
+  --ok: #56c990;
+  --ok-mark: #3fb87b;
+  --ok-surface: #12301f;
+  --warn: #efb450;
+  --warn-mark: #e0a030;
+  --warn-surface: #33270f;
+  --danger: #f08272;
+  --danger-mark: #e2604f;
+  --danger-surface: #3a1a15;
+  --idle: #9aa7b5;
+  --idle-mark: #6f7d8c;
+  --idle-surface: #1f2a35;
+  --info: #8fb0ff;
+  --info-surface: #17254a;
+}
+
+@theme inline {
+  --font-sans: 'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-ok: var(--ok);
+  --color-ok-mark: var(--ok-mark);
+  --color-ok-surface: var(--ok-surface);
+  --color-warn: var(--warn);
+  --color-warn-mark: var(--warn-mark);
+  --color-warn-surface: var(--warn-surface);
+  --color-danger: var(--danger);
+  --color-danger-mark: var(--danger-mark);
+  --color-danger-surface: var(--danger-surface);
+  --color-idle: var(--idle);
+  --color-idle-mark: var(--idle-mark);
+  --color-idle-surface: var(--idle-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+    font-feature-settings: 'tnum' 1;
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  /* One visible focus treatment everywhere, including elements shadcn does not style. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  a {
+    text-underline-offset: 3px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--ring) 30%, transparent);
+  }
+}
+
+@layer utilities {
+  /* Machine identifiers (hostnames, serials, tokens, hashes): the mono face keeps 0/O and 1/l/I apart. */
+  .ident {
+    font-family: var(--font-mono);
+    font-size: 0.9285em;
+    letter-spacing: -0.01em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
