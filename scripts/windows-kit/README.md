@@ -109,3 +109,19 @@ Results also stay in the kit folder under `results-<time>\`.
 - Leftovers after an aborted run (Ctrl+C): `Get-Service DranzoRMM*`,
   `Get-ScheduledTask DranzoKitTest-*`; remove with `sc.exe delete <name>`
   and `Unregister-ScheduledTask <name>`.
+
+## Installing the agent on one PC (without the test kit)
+
+`Install-DranzoAgent.ps1` installs and enrolls a single Windows PC and reports
+each step: network reach, copy to `C:\Program Files\DranzoRMM`, Windows Security
+removing the binary, the `install` output, enrollment within 60 s, service
+state, the last lines of `agent.log`. Put it in one folder with
+`dranzo-agent-windows-<arch>.exe`, `ca.pem` and `trust.json`, then run in an
+Administrator PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Install-DranzoAgent.ps1 -ServerUrl https://<server>:8443
+```
+
+It asks for the enrollment token and writes `DranzoInstall.txt` (token
+redacted) to the Desktop.
