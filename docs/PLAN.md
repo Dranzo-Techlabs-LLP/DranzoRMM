@@ -67,7 +67,7 @@ Verification environment: macOS (Apple Silicon) dev machine, local PostgreSQL 16
 - [~] Agent posture collectors: Linux and macOS run for real (non-root on macOS); Windows (Security Center/Defender, BitLocker, NetFirewall) compiled and fixture-tested only
 - [~] Vulnerability matching (NVD + CISA KEV): import and matching tested with sample feed data; live feed download not run (`Dranzo:Feeds:Enabled` off by default). Heuristic; application software only
 - [~] Alert rules and evaluation; webhook, Teams and Slack payloads delivered to a local receiver in tests; email (SMTP) not sent (no SMTP server)
-- [ ] Dashboard: security posture, vulnerabilities, alerts, channels
+- [x] Dashboard: security posture, vulnerabilities, alerts, channels; remote terminal, files and desktop hand-off; policies and compliance; reports; releases; API keys; client portal (browser-verified against the real server and agent)
 
 ## Phase 6: Remote support
 
