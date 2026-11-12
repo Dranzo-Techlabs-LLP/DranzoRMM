@@ -219,7 +219,7 @@ public static class JobEndpoints
                 byOs = devices.GroupBy(d => d.Os).ToDictionary(g => g.Key, g => g.Count()),
                 online = devices.Count(d => d.IsOnline),
             });
-        }).RequirePermission(Permissions.ScriptsRun);
+        }).RequirePermission(Permissions.DevicesRead);
 
         // Jobs are listed through the runs the caller can see, so site- and group-scoped users get their own slice.
         api.MapGet("/jobs", async (Guid? deviceId, string? kind, bool? scheduled, int? page, int? pageSize, Ctx c, CancellationToken ct) =>

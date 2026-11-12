@@ -269,7 +269,7 @@ public static class PatchEndpoints
                 {
                     id = g.Key.CatalogEntryId, g.Key.Title, g.Key.Kb, g.Key.Source, g.Key.Severity, g.Key.Category, g.Key.FirstSeenAt,
                     devices = g.Count(), pending = g.Count(x => x.Status == PatchStatus.Pending), approved = g.Count(x => x.Status == PatchStatus.Approved),
-                    failed = g.Count(x => x.Status == PatchStatus.Failed), rejected = g.Count(x => x.Status == PatchStatus.Rejected),
+                    failed = g.Count(x => x.Status == PatchStatus.Failed), rejected = g.Count(x => x.Status == PatchStatus.Rejected), deferred = g.Count(x => x.Status == PatchStatus.Deferred),
                 }).OrderByDescending(x => x.devices).Take(2000).ToListAsync(ct);
             return Results.Ok(rows);
         }).RequirePermission(Permissions.PatchesRead);

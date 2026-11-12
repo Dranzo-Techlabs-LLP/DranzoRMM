@@ -157,7 +157,7 @@ public sealed class LiveHub(ScopeResolver scopes, TenantContext tenant, DranzoDb
 
     public async Task<bool> SubscribeJob(Guid jobId)
     {
-        if (await ScopeAsync(Permissions.JobsRead) is null || !await db.JobRuns.AnyAsync(r => r.JobId == jobId))
+        if (await ScopeAsync(Permissions.JobsRead) is null || !(await db.JobRuns.AnyAsync(r => r.JobId == jobId) || await db.Jobs.AnyAsync(j => j.Id == jobId)))
         {
             return false;
         }
