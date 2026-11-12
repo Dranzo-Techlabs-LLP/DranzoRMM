@@ -113,6 +113,11 @@ public sealed class MeshOptions
     /// </summary>
     public bool AllowSharedUser { get; set; }
     public int LoginTokenMinutes { get; set; } = 2;
+    /// <summary>
+    /// SHA-256 (hex) of MeshCentral's HTTPS certificate, for a MeshCentral with a self-signed certificate. The server
+    /// then accepts exactly that certificate when it downloads MeshAgent installers. Leave empty for a publicly trusted one.
+    /// </summary>
+    public string? CertificateSha256 { get; set; }
     /// <summary>MeshCentral agent architecture ids per "os-arch". Check them against your MeshCentral version.</summary>
     public Dictionary<string, int> AgentIds { get; set; } = new()
     {

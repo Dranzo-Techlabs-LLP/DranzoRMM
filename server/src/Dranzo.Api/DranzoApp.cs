@@ -123,6 +123,8 @@ public static class DranzoApp
         builder.Services.AddScoped<IAgentMessageProcessor, AgentErrorProcessor>();
         builder.Services.AddSignalR(o => o.MaximumReceiveMessageSize = 64 * 1024);
         builder.Services.AddHttpClient();
+        builder.Services.AddHttpClient(MeshCentral.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(sp => MeshCentral.CreateHandler(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DranzoOptions>>().Value.Mesh.CertificateSha256));
         FeatureRegistration.AddServices(builder.Services);
 
         if (options.RunBackgroundServices)

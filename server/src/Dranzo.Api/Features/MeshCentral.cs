@@ -19,7 +19,41 @@ namespace Dranzo.Api.Features;
 /// </summary>
 public sealed class MeshCentral(IOptions<DranzoOptions> options, IHttpClientFactory http, TimeProvider clock)
 {
+    public const string HttpClientName = "meshcentral";
+
     private MeshOptions Opt => options.Value.Mesh;
+
+    /// <summary>
+    /// The handler for calls to MeshCentral. Normal certificate validation applies; when <paramref name="pinSha256Hex"/>
+    /// is set, a certificate that fails validation is still accepted if its SHA-256 equals the pin (self-signed MeshCentral).
+    /// </summary>
+    public static SocketsHttpHandler CreateHandler(string? pinSha256Hex)
+    {
+        var handler = new SocketsHttpHandler();
+        if (string.IsNullOrWhiteSpace(pinSha256Hex))
+        {
+            return handler;
+        }
+        byte[] pin;
+        try
+        {
+            pin = Convert.FromHexString(pinSha256Hex.Replace(":", "", StringComparison.Ordinal).Trim());
+        }
+        catch (FormatException)
+        {
+            pin = [];
+        }
+        if (pin.Length != SHA256.HashSizeInBytes)
+        {
+            throw new InvalidOperationException("Dranzo:Mesh:CertificateSha256 must be the 64-digit hex SHA-256 of MeshCentral's certificate.");
+        }
+        handler.SslOptions.RemoteCertificateValidationCallback = (_, cert, _, errors) => PinAccepts(pin, cert, errors);
+        return handler;
+    }
+
+    public static bool PinAccepts(byte[] pin, System.Security.Cryptography.X509Certificates.X509Certificate? cert, System.Net.Security.SslPolicyErrors errors) =>
+        errors == System.Net.Security.SslPolicyErrors.None
+        || (cert is not null && CryptographicOperations.FixedTimeEquals(SHA256.HashData(cert.GetRawCertData()), pin));
 
     public bool Configured => !string.IsNullOrEmpty(Opt.Url) && !string.IsNullOrEmpty(Opt.LoginTokenKey);
 
@@ -68,7 +102,7 @@ public sealed class MeshCentral(IOptions<DranzoOptions> options, IHttpClientFact
             throw new InvalidOperationException($"No MeshCentral agent id configured for {os}-{arch}.");
         }
         var url = $"{Opt.Url!.TrimEnd('/')}/meshagents?id={id}&meshid={Uri.EscapeDataString(meshGroupId)}&installflags=0";
-        var client = http.CreateClient();
+        var client = http.CreateClient(HttpClientName);
         client.Timeout = TimeSpan.FromMinutes(5);
         var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();

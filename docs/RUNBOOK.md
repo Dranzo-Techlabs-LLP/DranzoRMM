@@ -137,6 +137,7 @@ underscores: `Dranzo__Section__Key`. Array items use an index: `Dranzo__AgentHos
 | **MeshCentral** | | | |
 | `Dranzo:Mesh:Url`, `MeshId`, `User`, `Domain` | `Dranzo__Mesh__...` | user `admin` | MeshCentral endpoint and identity. |
 | `Dranzo:Mesh:LoginTokenKey` | `Dranzo__Mesh__LoginTokenKey` | - | From `meshcentral --logintokenkey`. **Secret**: equals MeshCentral access as `User`. |
+| `Dranzo:Mesh:CertificateSha256` | `Dranzo__Mesh__CertificateSha256` | - | Hex SHA-256 of MeshCentral's HTTPS certificate when it is self-signed (`openssl x509 -in webserver-cert-public.crt -noout -fingerprint -sha256`). The server then trusts exactly that certificate for MeshAgent downloads. `MeshId` is the group id without the `mesh//` prefix. |
 | `Dranzo:Mesh:AllowSharedUser` | | `false` | Only safe with a single organisation (a shared MeshCentral login sees every device). |
 | `Dranzo:Mesh:LoginTokenMinutes` | | 2 | Lifetime of minted login tokens. |
 | `Dranzo:Mesh:AgentIds` | | built in | MeshCentral agent ids per `os-arch`; check against your MeshCentral version. |

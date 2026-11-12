@@ -4,6 +4,10 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 
 ## Unreleased (0.1.0-dev)
 
+### Fixes after first LAN testing
+- Windows: single-PC installer script (`scripts/windows-kit/Install-DranzoAgent.ps1` + double-click `.cmd`) that reports every step.
+- MeshCentral: `Dranzo:Mesh:CertificateSha256` pins a self-signed MeshCentral certificate for MeshAgent downloads (normal validation otherwise).
+
 ### Phase 0: Foundation
 - Repository layout (`agent/`, `server/`, `web/`, `installers/`, `deploy/`, `docs/`, `scripts/`).
 - Design documents: `SPEC.md`, `ARCHITECTURE.md`, `PROTOCOL.md`, `THREAT_MODEL.md`, `RUNBOOK.md`, `PLAN.md`, `CLAUDE.md`.
