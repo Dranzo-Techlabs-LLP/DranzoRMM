@@ -58,12 +58,19 @@ The agent can also be exercised without the server: `go run ./cmd/fakeserver ...
 
 ```sh
 cp .env.example .env        # replace every CHANGE_ME value
-docker compose -f deploy/docker-compose.yml up --build
-scripts/e2e.sh              # enrols a containerised Linux agent and runs a script
+docker compose -f deploy/docker-compose.yml --env-file .env up -d --build
+#   dashboard  http://localhost:8081   (sign in as DRANZO_ADMIN_EMAIL; enroll an authenticator app)
+#   API direct http://localhost:8080   agent gateway https://localhost:8443
+scripts/e2e.sh              # sign-in, org/token, Linux agent container, script, files session, revoke
 ```
 
-(`deploy/docker-compose.yml` and `scripts/e2e.sh` are maintained with the server; they did not
-exist yet when this runbook was written.)
+`scripts/e2e.py --help` lists more modes: `--agent native --agent-binary <path>` runs a locally built
+agent against the stack, and `--update-binary <agent built with a newer version>` adds a signed
+self-update round trip. The test keeps the administrator's dev-only TOTP seed in
+`deploy/.e2e-state.json` (git-ignored); delete it together with `docker compose down -v`.
+
+Object storage is **Azurite** (Microsoft's Azure Blob emulator), not MinIO: MinIO no longer
+publishes container images. The server's S3 client is still available (`Dranzo__Storage__Type=s3`).
 
 ### 1.4 Tests and checks (the same commands CI runs)
 
@@ -429,3 +436,40 @@ Notes:
 | Server refuses to start: bootstrap password rejected | The bootstrap password fails the policy (12+ characters, not common, not containing the e-mail name). |
 | `dotnet format --verify-no-changes` fails locally but not in CI (or the reverse) | The root `.editorconfig` must be present: it sets the two initializer-formatting options the code relies on. |
 | macOS package build contains `._*` files | Build started from an application macOS tracks with `com.apple.provenance`; `build-pkg.sh` strips them and fails if any remain. |
+
+
+## 11. Testing on your own machines
+
+Start the stack (section 1.3) on a machine the test devices can reach, and set
+`Dranzo__AgentHostnames__*` / `DRANZO_PUBLIC_AGENT_URL` to that machine's LAN name or IP **before the first
+start** (the gateway certificate is issued for those names; to change them later delete the `keys` volume,
+which also invalidates every enrolled device). Then in the dashboard: create an organization, site and
+enrollment token (Enrollment page), and copy the CA certificate and trust file shown there.
+
+| Device | Install | Notes |
+|---|---|---|
+| **Linux VM / container** (Ubuntu, Debian, RHEL family) | Build packages with `installers/linux/build-packages.sh` (or copy the `linux/<arch>` binary), install the `.deb`/`.rpm`, then `sudo dranzo-agent install --server https://<host>:8443 --token <token> --ca-file ca.pem --trust-file trust.json` | Verified in Debian 12 and Rocky 9 containers, including systemd. A container without systemd: use `deploy/agent-test` (foreground mode). |
+| **Mac** (macOS 13+, Apple Silicon or Intel) | `installers/macos/build-pkg.sh` builds an **unsigned** pkg; install it, then `sudo /usr/local/bin/dranzo-agent install ...` as above | The pkg is unsigned until you provide Developer ID credentials (section 9), so Gatekeeper will warn. The launchd service path and root-only features (dialogs in the user's session, `installer -pkg`, `softwareupdate --install`) have **not** been run yet; please test them first. |
+| **Windows 11 VM** (x64 or ARM64) | Build the MSI on Windows with `installers/wix/build.ps1`, or copy `dranzo-agent.exe` and run `dranzo-agent.exe install --server ... --token ... --ca-file ... --trust-file ...` in an elevated prompt | **No Windows code has ever run.** It compiles, vets and lints for both architectures. Expect first-run issues; collect `C:\ProgramData\DranzoRMM\agent.log`. |
+
+Suggested acceptance walk-through per device, matching the brief: device shows online with inventory
+(Phase 1) → run a script and watch live output (2) → install and remove 7-Zip / `tree` (3) → scan and
+install updates (4) → turn the firewall or antivirus off and see the alert (5) → open a terminal and a
+file session with consent mode "require", check the prompt and the on-screen indicator (6) → assign a
+"firewall on + remediate" policy (7) → publish a release to a pilot group (8).
+
+### 11.1 macOS privacy permissions (remote support)
+
+macOS requires a person to approve some capabilities once per Mac (System Settings → Privacy &
+Security). Without MDM there is no way around this, by design:
+
+| Permission | Needed by | Without it |
+|---|---|---|
+| **Screen Recording** | MeshCentral agent (remote desktop) | The technician sees a black or wallpaper-only screen. |
+| **Accessibility** | MeshCentral agent (remote keyboard/mouse) | View-only remote desktop. |
+| **Full Disk Access** | `dranzo-agent` (file browser in protected folders, some posture checks) | Files under `~/Library`, Mail, Messages etc. return "permission denied"; the dashboard shows the error. |
+
+Approve them on the Mac after the MeshAgent is installed (System Settings → Privacy & Security → the
+relevant list → enable the agent). The DranzoRMM consent prompt and indicator are separate and always
+apply. With MDM (Phase 9, `docs/MDM_PLAN.md`) Full Disk Access and Accessibility can be pre-approved by a
+PPPC profile; Screen Recording can only be made approvable by a standard user, not granted silently.
