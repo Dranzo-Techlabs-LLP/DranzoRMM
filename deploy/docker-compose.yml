@@ -15,7 +15,7 @@ name: dranzormm
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_DB: dranzo
       POSTGRES_USER: dranzo
