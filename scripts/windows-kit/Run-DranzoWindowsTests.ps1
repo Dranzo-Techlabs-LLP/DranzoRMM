@@ -60,7 +60,7 @@
 .EXAMPLE
     .\Run-DranzoWindowsTests.ps1
 .EXAMPLE
-    .\Run-DranzoWindowsTests.ps1 -All -ServerUrl https://192.168.68.102:8443 -TokenFile .\token.txt -CaFile .\ca.pem -TrustFile .\trust.json
+    .\Run-DranzoWindowsTests.ps1 -All -ServerUrl https://<server>:8443 -TokenFile .\token.txt -CaFile .\ca.pem -TrustFile .\trust.json
 #>
 [CmdletBinding()]
 param(

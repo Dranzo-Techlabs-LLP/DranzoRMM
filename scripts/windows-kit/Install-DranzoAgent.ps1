@@ -9,7 +9,7 @@
 # The script asks for the enrollment token (dz_enroll_...). It prints every step and saves a copy to
 # DranzoInstall.txt on the Desktop (the token is redacted there). Send that file back if anything fails.
 param(
-    [string]$ServerUrl = 'https://192.168.68.102:8443',
+    [string]$ServerUrl = '',
     [string]$Token = ''
 )
 $ErrorActionPreference = 'Continue'
@@ -42,6 +42,9 @@ Set-Content -Path $log -Value "DranzoRMM install log $(Get-Date -Format o)" -Enc
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) { Fail 'Run this in an Administrator PowerShell (right-click PowerShell > Run as administrator).' }
+
+if (-not $ServerUrl) { $ServerUrl = (Read-Host 'Agent server address (for example https://rmm.example.com:8443)').Trim() }
+if ($ServerUrl -notmatch '^https://[^/\s]+$') { Fail "Server address must look like https://host:8443 (got '$ServerUrl')." }
 
 Step 'Computer'
 Say "Windows: $((Get-CimInstance Win32_OperatingSystem).Caption) $((Get-CimInstance Win32_OperatingSystem).Version), CPU: $env:PROCESSOR_ARCHITECTURE"

@@ -46,7 +46,7 @@ Output: `dist/windows-kit/DranzoWindowsKit-amd64.zip` and
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\Run-DranzoWindowsTests.ps1 -All `
-       -ServerUrl https://192.168.68.102:8443 -TokenFile .\token.txt -CaFile .\ca.pem -TrustFile .\trust.json `
+       -ServerUrl https://<server>:8443 -TokenFile .\token.txt -CaFile .\ca.pem -TrustFile .\trust.json `
        -UninstallAfter
    ```
 
