@@ -62,6 +62,12 @@ contents:
       mode: 0644
       owner: root
       group: root
+  - src: ./20-update-guard.conf
+    dst: /usr/lib/systemd/system/dranzormm-agent.service.d/20-update-guard.conf
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
 
   # Bootstrap configuration (server URL + enrolment token until enrolled): root only.
   - dst: /etc/dranzormm

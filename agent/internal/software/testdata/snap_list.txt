@@ -1,0 +1,6 @@
+Name               Version          Rev    Tracking         Publisher    Notes
+bare               1.0              5      latest/stable    canonical**  base
+core22             20240904         1621   latest/stable    canonical**  base
+firefox            131.0.2-1        5091   latest/stable/…  mozilla**    -
+my-local-snap      0.1              x1     -                -            dangerous
+snapd              2.63             21759  latest/stable    canonical**  snapd

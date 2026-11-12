@@ -61,12 +61,16 @@ public static class UserEndpoints
             return Results.Created($"/api/v1/users/{user.Id}", new { user.Id, user.Email });
         }).RequirePermission(Permissions.UsersManage, partnerWide: true);
 
-        api.MapPatch("/users/{id:guid}", async (Guid id, UpdateUserRequest req, Ctx c, CancellationToken ct) =>
+        api.MapPatch("/users/{id:guid}", async (Guid id, UpdateUserRequest req, Ctx c, ScopeResolver scopes, CancellationToken ct) =>
         {
             var user = await c.Db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
             if (user is null)
             {
                 return Api.NotFound();
+            }
+            if (!await MayManageAsync(c, scopes, id, ct))
+            {
+                return TooPowerful();
             }
             if (req.DisplayName is not null)
             {
@@ -99,12 +103,16 @@ public static class UserEndpoints
         }).RequirePermission(Permissions.UsersManage, partnerWide: true);
 
         // Resets a user's authenticator. The user must enroll a new one at next sign-in; MFA is never switched off.
-        api.MapPost("/users/{id:guid}/reset-mfa", async (Guid id, Ctx c, CancellationToken ct) =>
+        api.MapPost("/users/{id:guid}/reset-mfa", async (Guid id, Ctx c, ScopeResolver scopes, CancellationToken ct) =>
         {
             var user = await c.Db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
             if (user is null)
             {
                 return Api.NotFound();
+            }
+            if (!await MayManageAsync(c, scopes, id, ct))
+            {
+                return TooPowerful();
             }
             user.TotpEnabled = false;
             user.TotpSecretProtected = null;
@@ -117,12 +125,16 @@ public static class UserEndpoints
             return Results.NoContent();
         }).RequirePermission(Permissions.UsersManage, partnerWide: true).RequireStepUp();
 
-        api.MapPost("/users/{id:guid}/unlock", async (Guid id, Ctx c, CancellationToken ct) =>
+        api.MapPost("/users/{id:guid}/unlock", async (Guid id, Ctx c, ScopeResolver scopes, CancellationToken ct) =>
         {
             var user = await c.Db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
             if (user is null)
             {
                 return Api.NotFound();
+            }
+            if (!await MayManageAsync(c, scopes, id, ct))
+            {
+                return TooPowerful();
             }
             user.LockoutEnd = null;
             user.FailedLogins = 0;
@@ -132,12 +144,16 @@ public static class UserEndpoints
         }).RequirePermission(Permissions.UsersManage, partnerWide: true);
 
         // Sets a temporary password: the user must change it at next sign-in and all their sessions end.
-        api.MapPost("/users/{id:guid}/reset-password", async (Guid id, CreateUserRequest req, Ctx c, IOptions<DranzoOptions> opt, CancellationToken ct) =>
+        api.MapPost("/users/{id:guid}/reset-password", async (Guid id, CreateUserRequest req, Ctx c, ScopeResolver scopes, IOptions<DranzoOptions> opt, CancellationToken ct) =>
         {
             var user = await c.Db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
             if (user is null)
             {
                 return Api.NotFound();
+            }
+            if (!await MayManageAsync(c, scopes, id, ct))
+            {
+                return TooPowerful();
             }
             var problem = PasswordPolicy.Validate(req.Password ?? "", user.Email, opt.Value.Auth.PasswordMinLength);
             if (problem is not null)
@@ -156,12 +172,16 @@ public static class UserEndpoints
             return Results.NoContent();
         }).RequirePermission(Permissions.UsersManage, partnerWide: true).RequireStepUp();
 
-        api.MapDelete("/users/{id:guid}", async (Guid id, Ctx c, CancellationToken ct) =>
+        api.MapDelete("/users/{id:guid}", async (Guid id, Ctx c, ScopeResolver scopes, CancellationToken ct) =>
         {
             var user = await c.Db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
             if (user is null)
             {
                 return Api.NotFound();
+            }
+            if (!await MayManageAsync(c, scopes, id, ct))
+            {
+                return TooPowerful();
             }
             if (id == c.Who.UserId)
             {
@@ -331,6 +351,23 @@ public static class UserEndpoints
             return Results.NoContent();
         }).RequirePermission(Permissions.RolesManage, partnerWide: true).RequireStepUp();
     }
+
+    /// <summary>
+    /// A user manager may only act on accounts that are not more powerful than themselves: the target may not hold any
+    /// permission the caller lacks. Otherwise users.manage alone could reset a Partner Admin's password and MFA.
+    /// </summary>
+    private static async Task<bool> MayManageAsync(Ctx c, ScopeResolver scopes, Guid targetUserId, CancellationToken ct)
+    {
+        if (targetUserId == c.Who.UserId)
+        {
+            return true;
+        }
+        var mine = (await scopes.AssignmentsAsync(c.Who, ct)).Where(a => a.ScopeType == ScopeType.Partner).SelectMany(a => a.Role.Permissions).ToHashSet();
+        var theirs = await c.Db.RoleAssignments.AsNoTracking().Include(a => a.Role).Where(a => a.UserId == targetUserId).ToListAsync(ct);
+        return theirs.All(a => a.Role.Permissions.All(mine.Contains));
+    }
+
+    private static IResult TooPowerful() => Api.Error(403, "forbidden", "This account has permissions you do not have; ask a Partner Admin.");
 
     /// <summary>True if <paramref name="userId"/> is the only enabled user holding partner-wide role management.</summary>
     private static async Task<bool> IsLastPartnerAdmin(Ctx c, Guid userId, CancellationToken ct)

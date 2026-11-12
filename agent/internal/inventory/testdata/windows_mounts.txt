@@ -1,0 +1,6 @@
+C:|C:|NTFS
+D:|D:|ReFS
+E:|E:|CDFS
+F:|F:|FAT32
+G:|G:|
+H:|H:|exFAT

@@ -187,8 +187,16 @@ public static class PolicyEndpoints
         {
             var policies = await c.Db.Policies.AsNoTracking().OrderBy(p => p.Name).ToListAsync(ct);
             var ids = policies.Select(p => p.Id).ToList();
-            // Policies were loaded through the tenant filter; their assignments are read by policy id inside the partner.
-            var assignments = await c.Db.PolicyAssignments.AsNoTracking().Where(a => ids.Contains(a.PolicyId)).ToListAsync(ct);
+            // Policies were loaded through the tenant filter; their assignments are read by policy id inside the partner
+            // and then narrowed to the ones whose target the caller can see (shared policies are assigned across clients).
+            var assignments = new List<PolicyAssignment>();
+            foreach (var a in await c.Db.PolicyAssignments.AsNoTracking().Where(a => ids.Contains(a.PolicyId)).ToListAsync(ct))
+            {
+                if (await CoversAssignmentAsync(a, c, ct))
+                {
+                    assignments.Add(a);
+                }
+            }
             return Results.Ok(new
             {
                 checks = PolicyChecks.Os,
@@ -308,7 +316,7 @@ public static class PolicyEndpoints
         {
             var policy = await c.Db.Policies.FirstOrDefaultAsync(p => p.Id == id, ct);
             var a = policy is null ? null : await c.Db.PolicyAssignments.FirstOrDefaultAsync(x => x.Id == assignmentId && x.PolicyId == id, ct);
-            if (a is null || (a.ScopeType == ScopeType.Partner && !c.Tenant.AllOrgs) || (a.ScopeType == ScopeType.Organization && !c.Tenant.CoversOrganization(a.ScopeId!.Value)))
+            if (a is null || !await CoversAssignmentAsync(a, c, ct))
             {
                 return Api.NotFound();
             }
@@ -366,6 +374,26 @@ public static class PolicyEndpoints
             var names = await c.Db.Policies.IgnoreQueryFilters().AsNoTracking().Where(p => p.PartnerId == c.Who.PartnerId && ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => new { p.Name, p.Check }, ct);
             return Results.Ok(rows.Select(r => new { r.PolicyId, policy = names.GetValueOrDefault(r.PolicyId)?.Name, check = names.GetValueOrDefault(r.PolicyId)?.Check, r.Compliant, r.Remediated, r.Supported, r.Detail, r.EvaluatedAt, r.NonCompliantSince }));
         }).RequirePermission(Permissions.PoliciesRead);
+    }
+
+    /// <summary>True when the caller's policies scope covers the whole target of the assignment.</summary>
+    private static async Task<bool> CoversAssignmentAsync(PolicyAssignment a, Ctx c, CancellationToken ct)
+    {
+        switch (a.ScopeType)
+        {
+            case ScopeType.Partner:
+                return c.Tenant.AllOrgs;
+            case ScopeType.Organization:
+                return a.ScopeId is { } o && c.Tenant.CoversOrganization(o);
+            case ScopeType.Site:
+                var site = a.ScopeId is { } s ? await c.Db.Sites.AsNoTracking().FirstOrDefaultAsync(x => x.Id == s, ct) : null;
+                return site is not null && c.Tenant.CoversSite(site.OrganizationId, site.Id);
+            case ScopeType.Group:
+                var group = a.ScopeId is { } g ? await c.Db.DeviceGroups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == g, ct) : null;
+                return group is not null && (c.Tenant.CoversSite(group.OrganizationId, group.SiteId) || c.Tenant.GroupIds.Contains(group.Id));
+            default:
+                return false;
+        }
     }
 
     private static string? Apply(Policy p, PolicyRequest req, bool creating)

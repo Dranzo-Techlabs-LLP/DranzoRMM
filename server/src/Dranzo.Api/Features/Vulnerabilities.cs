@@ -197,23 +197,46 @@ public sealed partial class VulnerabilityMatcher(DranzoDbContext db, TimeProvide
         if (allProducts.Length > 0)
         {
             var entries = await db.CveEntries.AsNoTracking().Where(e => e.Products.Any(p => allProducts.Contains(p))).Take(20_000).ToListAsync(ct);
-            var parsed = entries.Select(e => (Entry: e, Ranges: JsonSerializer.Deserialize<List<CpeRange>>(e.MatchJson, JsonSerializerOptions.Web) ?? [])).ToList();
+            // Index ranges by product so the work is (software x its own candidates), not (software x all entries).
+            var byProduct = new Dictionary<string, List<(CveEntry Entry, CpeRange Range)>>();
+            foreach (var entry in entries)
+            {
+                foreach (var range in (JsonSerializer.Deserialize<List<CpeRange>>(entry.MatchJson, JsonSerializerOptions.Web) ?? []).Take(500))
+                {
+                    var key = range.Product.ToLowerInvariant();
+                    if (!byProduct.TryGetValue(key, out var list))
+                    {
+                        byProduct[key] = list = [];
+                    }
+                    list.Add((entry, range));
+                }
+            }
+            var budget = 200_000; // hard cap on range comparisons per device
             foreach (var (s, candidates) in bySoftware)
             {
                 var hay = (s.Publisher + " " + s.Name + " " + s.PackageId).ToLowerInvariant();
-                foreach (var (entry, ranges) in parsed)
+                foreach (var (product, full) in candidates)
                 {
-                    var hit = ranges.Any(r => candidates.Any(c => c.Product == r.Product.ToLowerInvariant()
-                        // A partial-name match needs the CPE vendor to appear in the publisher/name to count.
-                        && (c.Full || hay.Contains(r.Vendor.Replace('_', ' ').ToLowerInvariant()) || hay.Contains(r.Vendor.ToLowerInvariant())))
-                        && VersionCompare.InRange(s.Version, r));
-                    if (hit)
+                    if (!byProduct.TryGetValue(product, out var ranges))
                     {
-                        found[(entry.Id, s.Name)] = new DeviceVulnerability
+                        continue;
+                    }
+                    foreach (var (entry, r) in ranges)
+                    {
+                        if (--budget < 0)
                         {
-                            Id = Guid.NewGuid(), PartnerId = device.PartnerId, OrganizationId = device.OrganizationId, DeviceId = device.Id, CveId = entry.Id,
-                            SoftwareName = s.Name, SoftwareVersion = s.Version, Severity = entry.Severity, CvssScore = entry.CvssScore, KnownExploited = entry.KnownExploited, DetectedAt = now,
-                        };
+                            break;
+                        }
+                        // A partial-name match needs the CPE vendor to appear in the publisher/name to count.
+                        var vendorOk = full || hay.Contains(r.Vendor.Replace('_', ' ').ToLowerInvariant()) || hay.Contains(r.Vendor.ToLowerInvariant());
+                        if (vendorOk && !found.ContainsKey((entry.Id, s.Name)) && VersionCompare.InRange(s.Version, r))
+                        {
+                            found[(entry.Id, s.Name)] = new DeviceVulnerability
+                            {
+                                Id = Guid.NewGuid(), PartnerId = device.PartnerId, OrganizationId = device.OrganizationId, DeviceId = device.Id, CveId = entry.Id,
+                                SoftwareName = s.Name, SoftwareVersion = s.Version, Severity = entry.Severity, CvssScore = entry.CvssScore, KnownExploited = entry.KnownExploited, DetectedAt = now,
+                            };
+                        }
                     }
                 }
             }

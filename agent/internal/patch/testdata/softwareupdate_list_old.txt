@@ -1,0 +1,10 @@
+Software Update Tool
+
+Finding available software
+Software Update found the following new or updated software:
+   * Security Update 2019-004-10.13.6
+	Security Update 2019-004 (10.13.6), 1942411K [recommended] [restart]
+   * iTunesX-12.8.2
+	iTunes (12.8.2), 273614K [recommended]
+   * RAWCameraUpdate6.21-6.21
+	Digital Camera RAW Compatibility Update (6.21), 7100K

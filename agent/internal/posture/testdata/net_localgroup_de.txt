@@ -1,0 +1,10 @@
+Aliasname      Administratoren
+Beschreibung   Administratoren haben uneingeschränkten Vollzugriff auf den Computer bzw. die Domäne.
+
+Mitglieder
+
+-------------------------------------------------------------------------------
+Administrator
+Anna Müller
+Der Befehl wurde erfolgreich ausgeführt.
+

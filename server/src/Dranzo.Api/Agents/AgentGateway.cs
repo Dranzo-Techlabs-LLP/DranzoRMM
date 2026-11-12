@@ -99,7 +99,7 @@ public static class AgentGateway
     }
 
     private static async Task<IResult> RenewAsync(RenewRequest req, HttpContext http, DranzoDbContext db, TenantContext tenant,
-        CertificateAuthority ca, IAuditLog audit, IOptions<DranzoOptions> options, TimeProvider clock, CancellationToken ct)
+        CertificateAuthority ca, IAuditLog audit, Features.AlertEngine alerts, IOptions<DranzoOptions> options, TimeProvider clock, CancellationToken ct)
     {
         tenant.SetSystem();
         var device = await AuthenticateDeviceAsync(http, db, clock, tracking: true, ct);
@@ -121,11 +121,18 @@ public static class AgentGateway
             return Api.BadRequest("Invalid certificate signing request.");
         }
         var presented = CertificateAuthority.Thumbprint(http.Connection.ClientCertificate!);
-        if (presented == device.CertThumbprint)
+        if (presented != device.CertThumbprint)
         {
-            device.PrevCertThumbprint = device.CertThumbprint;
-            device.PrevCertNotAfter = device.CertNotAfter;
+            // Only the current certificate may renew. A renewal attempt with the previous one means two parties hold
+            // keys for this device (for example a copied old key): refuse and raise the alarm.
+            await audit.WriteAsync(device.PartnerId, new AuditEntry("device.cert_renew", "denied", device.OrganizationId, device.Id, "device", device.Id.ToString(),
+                new { reason = "previous_certificate" }, ActorType: "agent", ActorId: device.Id, ActorName: device.Hostname, Ip: http.Connection.RemoteIpAddress?.ToString()), ct);
+            await alerts.RaiseAsync(device, Features.AlertTypes.AgentTamper, "renew-previous-cert", $"Certificate renewal with an old certificate for {device.Hostname}",
+                "A renewal was attempted with this device's previous certificate. Another party may hold an old device key; consider revoking and re-enrolling the device.", ct);
+            return Api.Error(403, "forbidden", "Renew with the current certificate.");
         }
+        device.PrevCertThumbprint = device.CertThumbprint;
+        device.PrevCertNotAfter = device.CertNotAfter;
         device.CertThumbprint = cert.Thumbprint;
         device.CertNotAfter = cert.NotAfter;
         await db.SaveChangesAsync(ct);
@@ -186,6 +193,13 @@ public static class AgentGateway
         using var socket = await http.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext { SubProtocol = SubProtocol, KeepAliveInterval = TimeSpan.FromSeconds(30) });
         using var conn = new AgentConnection(device.Id, device.PartnerId, device.OrganizationId, socket, opt.MessagesPerSecond, opt.MessageBurst) { RemoteIp = http.Connection.RemoteIpAddress?.ToString() };
         registry.Register(conn);
+        // A revoke that ran between authentication and registration found nothing to disconnect: check again.
+        if (!await db.Devices.AsNoTracking().AnyAsync(d => d.Id == device.Id && d.Status == DeviceStatus.Active, ct))
+        {
+            registry.Unregister(conn);
+            await conn.CloseAsync(WebSocketCloseStatus.PolicyViolation, "revoked");
+            return;
+        }
         using var logScope = log.BeginScope(new Dictionary<string, object> { ["device_id"] = device.Id });
         log.LogInformation("Agent connected");
         try
@@ -280,6 +294,15 @@ public static class AgentGateway
         if (!conn.HelloReceived && type != "hello")
         {
             await conn.CloseAsync(WebSocketCloseStatus.PolicyViolation, "hello required");
+            return;
+        }
+        if (!conn.TryConsumeType(type, raw.Length))
+        {
+            log.LogWarning("Agent exceeded the size or rate limit for {Type}; message dropped", type);
+            if (type != "error")
+            {
+                await conn.SendPlainAsync("error", new { code = "rate_limited", message = $"Too many or too large '{type}' messages; this one was dropped.", refId = id }, ct);
+            }
             return;
         }
 

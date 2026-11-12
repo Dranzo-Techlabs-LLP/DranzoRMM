@@ -1,0 +1,12 @@
+Software Update Tool
+
+Finding available software
+Software Update found the following new or updated software:
+* Label: macOS Sonoma 14.6.1-23G93
+	Title: macOS Sonoma 14.6.1, Version: 14.6.1, Size: 1568310KiB, Recommended: YES, Action: restart, 
+* Label: Command Line Tools for Xcode-15.3
+	Title: Command Line Tools for Xcode, Version: 15.3, Size: 722849KiB, Recommended: YES, 
+* Label: Safari17.6SonomaAuto-17.6
+	Title: Safari, Version: 17.6, Size: 163297KiB, Recommended: YES, 
+* Label: Pro Video Formats-2.3.2
+	Title: Pro Video Formats, with HEVC, Version: 2.3.2, Size: 7300KiB, Recommended: NO, 

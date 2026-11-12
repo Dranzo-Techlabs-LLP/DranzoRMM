@@ -1,0 +1,14 @@
+/dev/disk3s1s1|/|apfs
+devfs|/dev|devfs
+/dev/disk3s6|/System/Volumes/VM|apfs
+/dev/disk3s2|/System/Volumes/Preboot|apfs
+/dev/disk3s4|/System/Volumes/Update|apfs
+/dev/disk1s2|/System/Volumes/xarts|apfs
+/dev/disk1s1|/System/Volumes/iSCPreboot|apfs
+/dev/disk1s3|/System/Volumes/Hardware|apfs
+/dev/disk3s5|/System/Volumes/Data|apfs
+map auto_home|/System/Volumes/Data/home|autofs
+/dev/disk5s1|/Library/Developer/CoreSimulator/Volumes/iOS_22F77|apfs
+/dev/disk6s2|/Volumes/Backup|hfs
+/dev/disk7s1|/Volumes/USB STICK|msdos
+/dev/disk8s1|/Volumes/Install macOS|apfs

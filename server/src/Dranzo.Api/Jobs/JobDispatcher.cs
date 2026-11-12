@@ -175,7 +175,8 @@ public sealed class JobDispatcher : BackgroundService
             await audit.WriteAsync(device.PartnerId, new AuditEntry("job.dispatch", OrganizationId: device.OrganizationId, DeviceId: deviceId, TargetType: "job_run", TargetId: run.Id.ToString(),
                 Detail: new { run.Kind, jobId = run.JobId, job = run.Job.Name, requestedBy = run.Job.RequestedByName, attempt = run.Attempt },
                 ContentSha256: run.Job.ContentSha256.Length > 0 ? run.Job.ContentSha256 : Hashing.Sha256Hex(spec.ToJsonString()),
-                ActorType: run.Job.IsSystem ? "system" : "user", ActorId: run.Job.RequestedByUserId, ActorName: run.Job.RequestedByName), ct);
+                ActorType: run.Job.IsSystem ? "system" : run.Job.RequestedByName.StartsWith("apikey:", StringComparison.Ordinal) ? "apikey" : "user",
+                ActorId: run.Job.RequestedByUserId, ActorName: run.Job.RequestedByName), ct);
             await live.RunChangedAsync(run, device);
         }
         await db.SaveChangesAsync(ct);
@@ -266,6 +267,14 @@ public sealed class Scheduler(IServiceScopeFactory scopes, ILogger<Scheduler> lo
 
     protected override Task TickAsync(IServiceProvider sp, CancellationToken ct) => RunDueAsync(sp, ct);
 
+    private static string PermissionFor(string kind) => kind switch
+    {
+        JobKinds.Script => Permissions.ScriptsRun,
+        JobKinds.PatchInstall or JobKinds.PatchScan => Permissions.PatchesInstall,
+        JobKinds.SoftwareInstall or JobKinds.SoftwareUninstall or JobKinds.PackageInstall or JobKinds.PackageUninstall => Permissions.SoftwareDeploy,
+        _ => Permissions.DevicesManage,
+    };
+
     public static async Task RunDueAsync(IServiceProvider sp, CancellationToken ct)
     {
         var db = sp.GetRequiredService<DranzoDbContext>();
@@ -284,6 +293,25 @@ public sealed class Scheduler(IServiceScopeFactory scopes, ILogger<Scheduler> lo
                 q = q.Where(d => d.OrganizationId == org);
             }
             var devices = await target.Apply(q).ToListAsync(ct);
+            // Run with the authority the creator has *now*: a disabled or removed technician's schedule stops, and devices
+            // that later moved out of their scope are skipped.
+            if (job.RequestedByUserId is { } creatorId)
+            {
+                var creator = await db.Users.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(u => u.Id == creatorId && u.PartnerId == job.PartnerId, ct);
+                var scope = new TenantContext();
+                var allowed = creator is { Disabled: false } && await sp.GetRequiredService<Auth.ScopeResolver>().ApplyAsync(scope,
+                    new Auth.CurrentPrincipal { IsAuthenticated = true, PartnerId = job.PartnerId, UserId = creatorId }, PermissionFor(job.Kind), false, ct);
+                if (!allowed)
+                {
+                    job.Enabled = false;
+                    job.NextRunAt = null;
+                    await db.SaveChangesAsync(ct);
+                    await sp.GetRequiredService<IAuditLog>().WriteAsync(job.PartnerId, new AuditEntry("schedule.disabled", "denied", job.OrganizationId, TargetType: "job", TargetId: job.Id.ToString(),
+                        Detail: new { job.Name, reason = "creator no longer holds the permission" }, ActorType: "system", ActorName: "scheduler"), ct);
+                    continue;
+                }
+                devices = [.. devices.Where(d => scope.CoversDevice(d.PartnerId, d.OrganizationId, d.SiteId, d.GroupId))];
+            }
             var runs = jobs.AddRuns(job, devices);
             job.NextRunAt = NextOccurrence(job.Cron!, job.TimeZone ?? "UTC", now);
             await db.SaveChangesAsync(ct);

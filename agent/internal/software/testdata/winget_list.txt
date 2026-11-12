@@ -1,0 +1,11 @@
+﻿   -    \    |                                                                                 Name                                                              Id                                                   Version       Available     Source
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+7-Zip 24.08 (x64)                                                 7zip.7zip                                            24.08         24.09         winget
+Git                                                               Git.Git                                              2.46.0        2.47.0        winget
+Google Chrome                                                     Google.Chrome                                        130.0.6723.92               winget
+Microsoft Edge                                                    Microsoft.Edge                                       130.0.2849.68               winget
+Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.40.338… Microsoft.VCRedist.2015+.x64                         14.40.33810.0 14.42.34433.0 winget
+Contoso Legacy Tool                                               ARP\Machine\X64\ContosoLegacy                        3.1
+Windows Terminal                                                  Microsoft.WindowsTerminal                            1.21.2911.0                 winget
+Paint                                                             MSIX\Microsoft.Paint_11.2408.30.0_x64__8wekyb3d8bbwe 11.2408.30.0
+输入法 Tool                                                       Example.Ime                                          2.0.1                       winget

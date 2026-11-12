@@ -1,0 +1,16 @@
+{
+   "blockdevices": [
+      {"name": "vda", "type": "disk", "fstype": null, "mountpoint": null,
+         "children": [
+            {"name": "vda1", "type": "part", "fstype": "vfat", "mountpoint": "/boot/efi"},
+            {"name": "vda2", "type": "part", "fstype": "xfs", "mountpoint": "/boot"},
+            {"name": "vda3", "type": "part", "fstype": "LVM2_member", "mountpoint": null,
+               "children": [
+                  {"name": "rl-root", "type": "lvm", "fstype": "xfs", "mountpoint": "/"},
+                  {"name": "rl-swap", "type": "lvm", "fstype": "swap", "mountpoint": "[SWAP]"}
+               ]
+            }
+         ]
+      }
+   ]
+}

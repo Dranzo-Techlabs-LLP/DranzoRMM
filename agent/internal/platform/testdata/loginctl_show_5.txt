@@ -1,0 +1,7 @@
+Name=bob
+Remote=yes
+Type=tty
+Class=user
+Active=yes
+State=active
+Seat=

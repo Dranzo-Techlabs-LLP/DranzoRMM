@@ -1,0 +1,127 @@
+{
+  "publicKey": "ebVWLo/mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ=",
+  "kid": "cmd-65b60673d6ed884b",
+  "deviceId": "11111111-2222-3333-4444-555555555555",
+  "now": "2026-01-15T12:00:00Z",
+  "cases": [
+    {
+      "name": "valid job.dispatch",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "bb027730-6606-4a4a-bc28-8d99368b2e34",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDEyOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTI6MDU6MDBaIiwibm9uY2UiOiJUdjQ1U1dNNWZDY1FYSGZGNjFCZlRnPT0ifQ==",
+        "signature": "mFkEOhga6aFI29yD\u002Bw90rjRXapJhlznupvHYobXCOmrbdJUCTWFYbnR/kDEwp\u002BLzmM6WFJUACUjC6M0b1gDyAg==",
+        "keyId": "cmd-65b60673d6ed884b"
+      },
+      "expect": "ok"
+    },
+    {
+      "name": "wrong device",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "d0c1a89d-54e5-4527-af67-e0a6c9009c19",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiYWZlOGM5MmItMjcwZC00NWY0LTgwNzktMDFhODdhZTJlYjA4IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDEyOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTI6MDU6MDBaIiwibm9uY2UiOiJaenQzOHJpRU9wU1lCeEhDL1NnUTBRPT0ifQ==",
+        "signature": "Ik4L4a55yOHj3GqD8tLojoxUUUhSyC7Bjb83raVnLGWAla4RoP811ep3ian8y9055wHVPs3dFnpeZ8hIdjliBQ==",
+        "keyId": "cmd-65b60673d6ed884b"
+      },
+      "expect": "wrong_device"
+    },
+    {
+      "name": "expired",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "13229452-0a7b-4c9a-b02c-cb81a0734017",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDExOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTE6MDU6MDBaIiwibm9uY2UiOiJDUE4zYkxqNzRrdHlEUDFWV3RkcjNnPT0ifQ==",
+        "signature": "/10jcYkUJzn5lbdTq5B9be2IqcTGc6HxbIf4q/mWOOITSOShdLSDprUw34qk737H76Z7jbzSFHlU0rLKToEGBA==",
+        "keyId": "cmd-65b60673d6ed884b"
+      },
+      "expect": "expired"
+    },
+    {
+      "name": "not yet valid",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "595c3d59-0a13-4fee-b989-e09a49f7ae7a",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDEzOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTM6MDU6MDBaIiwibm9uY2UiOiJJSjM1WXc5Yi9qVnRuWC9EYzhzNGFBPT0ifQ==",
+        "signature": "TMbbDAJVGRJTxneJqfiK0MBo1G9zX8jQu32b5pMd9tkArkRBu4Mi5wwN92SiDlFju5hC0AO7DaX6M0HdDZyyBw==",
+        "keyId": "cmd-65b60673d6ed884b"
+      },
+      "expect": "not_yet_valid"
+    },
+    {
+      "name": "validity too long",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "b027796d-151c-4007-84ab-7121182d21b7",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDEyOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTQ6MDA6MDBaIiwibm9uY2UiOiJOcTBhQmM3XHUwMDJCWldHRERFSWVVNHM1SXc9PSJ9",
+        "signature": "eat\u002BSGA1yW3pFgSnQP5k1QjXLhaC4sZScR3o5\u002BGrsIcesNy3/8KbjvBZsLHeQpA8ouxNQUfcafGN2aUICFsmBg==",
+        "keyId": "cmd-65b60673d6ed884b"
+      },
+      "expect": "validity_too_long"
+    },
+    {
+      "name": "unsigned",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "556922b9-3408-4922-8456-c4f4a3cf535f",
+        "version": 1,
+        "payload": {
+          "jobRunId": "6199bdbd-b27c-4b84-93e8-8c1c83b0370c",
+          "kind": "script",
+          "timeoutSeconds": 60,
+          "maxOutputBytes": 1048576,
+          "spec": {
+            "language": "sh",
+            "body": "echo hi",
+            "args": [],
+            "env": {},
+            "runAs": "system",
+            "requireSignedPowerShell": false
+          }
+        }
+      },
+      "expect": "unsigned"
+    },
+    {
+      "name": "payload swapped under another signature",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "c030e1c7-1df9-420e-9807-12bd6af09ae9",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDEyOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTI6MDU6MDBaIiwibm9uY2UiOiJvMDNKTDUxR2tuV0dTZk9NS0ZxcFlRPT0ifQ==",
+        "signature": "P1\u002BDnhCu9\u002B3khokf1QS7DPO2YTVEujD4i55Xao4jQuioXEl9DwdB30zMWghG6JosG2wDiHSH6ZEdL9ciViNTCg==",
+        "keyId": "cmd-65b60673d6ed884b"
+      },
+      "expect": "bad_signature"
+    },
+    {
+      "name": "type changed after signing",
+      "envelope": {
+        "type": "update.available",
+        "id": "c030e1c7-1df9-420e-9807-12bd6af09ae9",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDEyOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTI6MDU6MDBaIiwibm9uY2UiOiJXS3QzbWxJbkMwVDFiY1FVUDdSU2xBPT0ifQ==",
+        "signature": "P1\u002BDnhCu9\u002B3khokf1QS7DPO2YTVEujD4i55Xao4jQuioXEl9DwdB30zMWghG6JosG2wDiHSH6ZEdL9ciViNTCg==",
+        "keyId": "cmd-65b60673d6ed884b"
+      },
+      "expect": "bad_signature"
+    },
+    {
+      "name": "unknown key id",
+      "envelope": {
+        "type": "job.dispatch",
+        "id": "c030e1c7-1df9-420e-9807-12bd6af09ae9",
+        "version": 1,
+        "signedPayload": "eyJqb2JSdW5JZCI6IjYxOTliZGJkLWIyN2MtNGI4NC05M2U4LThjMWM4M2IwMzcwYyIsImtpbmQiOiJzY3JpcHQiLCJ0aW1lb3V0U2Vjb25kcyI6NjAsIm1heE91dHB1dEJ5dGVzIjoxMDQ4NTc2LCJzcGVjIjp7Imxhbmd1YWdlIjoic2giLCJib2R5IjoiZWNobyBoaSIsImFyZ3MiOltdLCJlbnYiOnt9LCJydW5BcyI6InN5c3RlbSIsInJlcXVpcmVTaWduZWRQb3dlclNoZWxsIjpmYWxzZX0sImRldmljZUlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiaXNzdWVkQXQiOiIyMDI2LTAxLTE1VDEyOjAwOjAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMDEtMTVUMTI6MDU6MDBaIiwibm9uY2UiOiJXS3QzbWxJbkMwVDFiY1FVUDdSU2xBPT0ifQ==",
+        "signature": "P1\u002BDnhCu9\u002B3khokf1QS7DPO2YTVEujD4i55Xao4jQuioXEl9DwdB30zMWghG6JosG2wDiHSH6ZEdL9ciViNTCg==",
+        "keyId": "cmd-0000000000000000"
+      },
+      "expect": "unknown_key"
+    }
+  ]
+}

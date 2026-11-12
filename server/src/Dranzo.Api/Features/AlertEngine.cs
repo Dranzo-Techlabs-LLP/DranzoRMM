@@ -98,15 +98,18 @@ public sealed class AlertEngine(DranzoDbContext db, NotificationService notifica
                     if (inventory is not null)
                     {
                         using var inv = JsonDocument.Parse(inventory);
-                        foreach (var disk in Agents.J.Arr(inv.RootElement, "disks", 64))
+                        var full = Agents.J.Arr(inv.RootElement, "disks", 64)
+                            .Select(d => (Mount: Agents.J.Str(d, "mountPoint", 128), Total: Agents.J.Long(d, "totalBytes") ?? 0, Free: Agents.J.Long(d, "freeBytes") ?? 0))
+                            .Where(d => d.Total > 0 && (d.Total - d.Free) * 100.0 / d.Total >= percent).OrderByDescending(d => (d.Total - d.Free) * 1.0 / d.Total).ToList();
+                        // One alert per device, however many disks: an agent cannot open alerts by inventing mount points.
+                        if (full.Count > 0)
                         {
-                            var total = Agents.J.Long(disk, "totalBytes") ?? 0;
-                            var free = Agents.J.Long(disk, "freeBytes") ?? 0;
-                            if (total > 0 && (total - free) * 100.0 / total >= percent)
-                            {
-                                var mount = Agents.J.Str(disk, "mountPoint", 128);
-                                active.Add(new("disk:" + mount, $"Disk {mount} on {device.Hostname} is {(total - free) * 100.0 / total:F0}% full", $"{free / 1_073_741_824.0:F1} GiB free of {total / 1_073_741_824.0:F1} GiB (threshold {percent:F0}%)."));
-                            }
+                            var top = full[0];
+                            var title = full.Count == 1
+                                ? $"Disk {top.Mount} on {device.Hostname} is {(top.Total - top.Free) * 100.0 / top.Total:F0}% full"
+                                : $"{full.Count} disks on {device.Hostname} are above {percent:F0}%";
+                            var detail = string.Join("; ", full.Take(5).Select(d => $"{d.Mount}: {d.Free / 1_073_741_824.0:F1} GiB free of {d.Total / 1_073_741_824.0:F1} GiB"));
+                            active.Add(new("disk", title, detail + $" (threshold {percent:F0}%)"));
                         }
                     }
                     break;

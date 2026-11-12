@@ -391,10 +391,15 @@ public class Package : IOrgOptionalShared
 
 // ---------- Patching ----------
 
-public class PatchCatalogEntry : IPartnerOwned
+/// <summary>
+/// One update as reported by the devices of one organization. Kept per organization (not per partner) because the
+/// title/severity/category come from agents: a device of one client must never define what another client approves.
+/// </summary>
+public class PatchCatalogEntry : IOrgOwned
 {
     public Guid Id { get; set; }
     public Guid PartnerId { get; set; }
+    public Guid OrganizationId { get; set; }
     public required string Source { get; set; }
     public required string UpdateId { get; set; }
     public required string Title { get; set; }

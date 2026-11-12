@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<dict>
+		<key>date</key>
+		<date>2026-03-09T22:03:33Z</date>
+		<key>displayName</key>
+		<string>macOS 26.3</string>
+		<key>displayVersion</key>
+		<string>26.3</string>
+		<key>processName</key>
+		<string>softwareupdated</string>
+	</dict>
+	<dict>
+		<key>date</key>
+		<date>2026-08-27T06:41:10Z</date>
+		<key>displayName</key>
+		<string>macOS 26.6.2</string>
+		<key>displayVersion</key>
+		<string>26.6.2</string>
+		<key>processName</key>
+		<string>softwareupdated</string>
+	</dict>
+	<dict>
+		<key>date</key>
+		<date>2026-09-30T10:00:00Z</date>
+		<key>displayName</key>
+		<string>Pages</string>
+		<key>displayVersion</key>
+		<string>15.0</string>
+		<key>packageIdentifiers</key>
+		<array>
+			<string>com.apple.pkg.Pages14</string>
+		</array>
+		<key>processName</key>
+		<string>appstoreagent</string>
+	</dict>
+	<dict>
+		<key>date</key>
+		<date>2026-11-06T21:43:02Z</date>
+		<key>displayName</key>
+		<string>XProtectPlistConfigData</string>
+		<key>displayVersion</key>
+		<string>5372</string>
+		<key>packageIdentifiers</key>
+		<array>
+			<string>com.apple.pkg.XProtectPlistConfigData_10_15.16U4399</string>
+		</array>
+		<key>processName</key>
+		<string>softwareupdated</string>
+	</dict>
+	<dict>
+		<key>date</key>
+		<date>2026-11-08T08:15:00Z</date>
+		<key>displayName</key>
+		<string>Example Tool</string>
+		<key>displayVersion</key>
+		<string></string>
+		<key>processName</key>
+		<string>installer</string>
+	</dict>
+</array>
+</plist>

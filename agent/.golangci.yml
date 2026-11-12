@@ -1,0 +1,71 @@
+# golangci-lint v2 configuration for the DranzoRMM agent.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - gosec
+    - ineffassign
+    - unused
+    - errorlint
+    - bodyclose
+    - misspell
+    - unconvert
+    - nolintlint
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # struct layout micro-optimisation, not worth the churn
+        - shadow # err shadowing in short scopes is idiomatic
+    errcheck:
+      check-type-assertions: true
+      exclude-functions:
+        # CLI output to stdout / stderr: nothing useful can be done on failure.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gosec:
+      excludes:
+        # G204 (subprocess launched with a variable) and G304 (file path from a
+        # variable) are inherent to an endpoint-management agent: running
+        # administrator-supplied scripts and reading files is its purpose.
+        # Every such command comes from a signature-verified job, is passed as
+        # an argv array (never through a shell) and is validated by its handler.
+        - G204
+        - G304
+        # G702 is the taint-analysis variant of G204 (same reasoning).
+        - G702
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    rules:
+      # Tests create throwaway files and keys and deliberately use weak modes.
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+      # The fake server is a test helper; it is never part of a release build.
+      - path: internal/testserver/
+        linters:
+          - gosec
+      - path: cmd/fakeserver/
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/dranzo/dranzormm

@@ -1,0 +1,1 @@
+{"volumes":[{"mountPoint":"C:","volumeType":"OperatingSystem","volumeStatus":"EncryptionInProgress","protectionStatus":"Off","encryptionPercentage":37,"driveType":""},{"mountPoint":"F:","volumeType":"Data","volumeStatus":"DecryptionPaused","protectionStatus":"Off","encryptionPercentage":80,"driveType":"Fixed"}],"error":"","manageBde":""}

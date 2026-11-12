@@ -19,6 +19,12 @@ public sealed class SoftwareInventoryProcessor(DranzoDbContext db, Vulnerability
 
     public async Task HandleAsync(AgentConnection conn, JsonElement payload, CancellationToken ct)
     {
+        var hash = Dranzo.Infrastructure.Security.Hashing.Sha256Hex(payload.TryGetProperty("items", out var rawItems) ? rawItems.GetRawText() : "");
+        if (conn.LastReportHash.TryGetValue(Type, out var last) && last == hash)
+        {
+            return; // unchanged since the last report on this connection
+        }
+        conn.LastReportHash[Type] = hash;
         var device = await db.Devices.AsNoTracking().FirstAsync(d => d.Id == conn.DeviceId, ct);
         var now = clock.GetUtcNow();
         var items = payload.Arr("items", MaxItems).Where(i => i.ValueKind == JsonValueKind.Object).Select(i => new InstalledSoftware
@@ -124,7 +130,8 @@ public static partial class SoftwareEndpoints
                 return Api.BadRequest("action must be install or uninstall.");
             }
             var packages = req.Packages ?? [];
-            if (packages.Count == 0 || packages.Any(kv => kv.Key is not ("winget" or "brew" or "apt" or "dnf") || !PackageIdPattern().IsMatch(kv.Value ?? "")))
+            if (packages.Count == 0 || packages.Any(kv => kv.Key is not ("winget" or "brew" or "apt" or "dnf") || !PackageIdPattern().IsMatch(kv.Value ?? "")
+                || kv.Value!.Contains("://", StringComparison.Ordinal) || kv.Value.StartsWith('/') || kv.Value.Contains("..", StringComparison.Ordinal)))
             {
                 return Api.BadRequest("packages must map winget/brew/apt/dnf to a valid package id.");
             }

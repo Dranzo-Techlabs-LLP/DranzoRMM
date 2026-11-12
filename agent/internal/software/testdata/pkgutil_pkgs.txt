@@ -1,0 +1,12 @@
+com.apple.pkg.XProtectPlistConfigData_10_15.16U4423
+com.apple.pkg.XProtectPlistConfigData_10_15.16U4437
+com.apple.pkg.CLTools_SDK_macOS13
+com.apple.pkg.CLTools_SDK_macOS12
+com.apple.pkg.MAContent10_AssetPack_0637_AppleLoopsDrummerKyle
+com.apple.pkg.MAContent10_AssetPack_0593_DrummerSoCalGBLogic
+com.apple.pkg.CLTools_Executables
+com.apple.files.data-template
+com.apple.pkg.CLTools_SDK_macOS_LMOS
+com.apple.pkg.GatekeeperCompatibilityData.16U1906
+com.apple.pkg.XProtectPlistConfigData_10_15.16U4421
+com.apple.pkg.MobileAssets

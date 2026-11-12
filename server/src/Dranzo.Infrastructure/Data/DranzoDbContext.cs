@@ -132,7 +132,7 @@ public class DranzoDbContext(DbContextOptions<DranzoDbContext> options, TenantCo
         b.Entity<JobRun>().HasOne(e => e.Job).WithMany().HasForeignKey(e => e.JobId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<JobOutputChunk>().HasIndex(e => new { e.JobRunId, e.Seq });
         b.Entity<BlobGrant>().HasIndex(e => new { e.DeviceId, e.BlobId });
-        b.Entity<PatchCatalogEntry>().HasIndex(e => new { e.PartnerId, e.Source, e.UpdateId }).IsUnique();
+        b.Entity<PatchCatalogEntry>().HasIndex(e => new { e.PartnerId, e.OrganizationId, e.Source, e.UpdateId }).IsUnique();
         b.Entity<DevicePatchState>().HasIndex(e => new { e.DeviceId, e.CatalogEntryId }).IsUnique();
         b.Entity<DevicePatchState>().HasOne(e => e.CatalogEntry).WithMany().HasForeignKey(e => e.CatalogEntryId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<PostureSnapshot>().HasIndex(e => new { e.DeviceId, e.IsLatest });

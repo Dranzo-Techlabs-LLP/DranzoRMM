@@ -1,0 +1,67 @@
+[
+ {
+  "key": "{23170F69-40C1-2702-2408-000001000000}",
+  "view": "64",
+  "displayName": "7-Zip 24.08 (x64 edition)",
+  "displayVersion": "24.08.00.0",
+  "publisher": "Igor Pavlov",
+  "installDate": "20241003"
+ },
+ {
+  "key": "Git_is1",
+  "view": "64",
+  "displayName": "Git",
+  "displayVersion": "2.46.0",
+  "publisher": "The Git Development Community",
+  "installDate": "20240912"
+ },
+ {
+  "key": "{90160000-008C-0000-1000-0000000FF1CE}",
+  "view": "64",
+  "displayName": "Office 16 Click-to-Run Extensibility Component",
+  "displayVersion": "16.0.17928.20148",
+  "publisher": "Microsoft Corporation",
+  "systemComponent": 1
+ },
+ {
+  "key": "KB5044033",
+  "view": "64",
+  "displayName": "Security Update for Microsoft .NET (KB5044033)",
+  "parentKeyName": "Microsoft .NET Framework 4.8",
+  "releaseType": "Security Update"
+ },
+ {
+  "key": "AddressBook",
+  "view": "64"
+ },
+ {
+  "key": "{AC76BA86-7AD7-1033-7B44-AC0F074E4100}",
+  "view": "32",
+  "displayName": "Adobe Acrobat Reader",
+  "displayVersion": "24.003.20180",
+  "publisher": "Adobe Systems Incorporated",
+  "installDate": "2024-10-01"
+ },
+ {
+  "key": "Mozilla Firefox 131.0 (x64 en-US)",
+  "view": "64",
+  "displayName": "Mozilla Firefox (x64 en-US)",
+  "displayVersion": "131.0",
+  "publisher": "Mozilla",
+  "installDate": ""
+ },
+ {
+  "key": "Git_is1",
+  "view": "32",
+  "displayName": "Git",
+  "displayVersion": "2.46.0",
+  "publisher": "The Git Development Community",
+  "installDate": "20240912"
+ },
+ {
+  "key": "Weird\u0007Name",
+  "view": "64",
+  "displayName": "  Tool\twith\u0000control  ",
+  "displayVersion": "1.0"
+ }
+]

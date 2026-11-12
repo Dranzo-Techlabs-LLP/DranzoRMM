@@ -12,35 +12,35 @@ Verification environment: macOS (Apple Silicon) dev machine, local PostgreSQL 16
 
 ## Phase 0: Foundation
 
-- [ ] Repo scaffold (`agent/`, `server/`, `web/`, `installers/`, `deploy/`, `docs/`, `scripts/`)
-- [ ] `docs/SPEC.md`, `ARCHITECTURE.md`, `PROTOCOL.md`, `THREAT_MODEL.md`, `PLAN.md`, `RUNBOOK.md`, `CLAUDE.md`
-- [ ] Lint/format: Go (`gofmt`, `golangci-lint`), C# (analyzers, warnings as errors), TypeScript (ESLint, Prettier)
-- [ ] Docker Compose dev environment (PostgreSQL, MinIO, server, web, MeshCentral, Linux test agent)
-- [ ] CI workflows: build/test server, web, agent on 3 OS runners, 6 cross-compiled targets, packaging, SBOM, scans
-- [ ] Secret scanning (gitleaks pre-commit), Dependabot, `.env.example`
+- [x] Repo scaffold (`agent/`, `server/`, `web/`, `installers/`, `deploy/`, `docs/`, `scripts/`)
+- [x] `docs/SPEC.md`, `ARCHITECTURE.md`, `PROTOCOL.md`, `THREAT_MODEL.md`, `PLAN.md`, `RUNBOOK.md`, `CLAUDE.md`
+- [x] Lint/format: Go (`gofmt`, `golangci-lint`), C# (analyzers, warnings as errors), TypeScript (ESLint, Prettier)
+- [x] Docker Compose dev environment (PostgreSQL, **Azurite** instead of MinIO, server, web, MeshCentral profile, Linux test agent profile). `scripts/e2e.py` passes against it with the Linux agent container.
+- [~] CI workflow written (`.github/workflows/ci.yml`, SHA-pinned actions). **Never run**: no GitHub remote. All steps it calls were run locally except Windows/macOS runners, signing and actionlint.
+- [~] gitleaks config + pre-commit, Dependabot, `.env.example` written; gitleaks itself not run locally.
 
 ## Phase 1: Identity, tenants, enrollment
 
-- [ ] Data model + EF Core migrations, central tenant query filters
-- [ ] Login: password policy, lockout, mandatory TOTP, recovery codes, sessions (idle/absolute timeout), CSRF, step-up
-- [ ] Passkeys / WebAuthn as an optional second factor
-- [ ] RBAC: built-in roles, custom roles, assignments scoped to partner / organization / site / group
-- [ ] Organizations, sites, groups CRUD; users and roles admin
-- [ ] Private CA, enrollment tokens, CSR enrollment, mTLS gateway, certificate renewal and revocation
+- [x] Data model + EF Core migrations, central tenant query filters (test: every entity filtered or explicitly global)
+- [x] Login: password policy, lockout, mandatory TOTP, recovery codes, sessions (idle/absolute timeout), CSRF, step-up, forced temporary-password change
+- [ ] Passkeys / WebAuthn as an optional second factor — **not done** (brief marks it optional; TOTP is mandatory and implemented)
+- [x] RBAC: built-in roles, custom roles, assignments scoped to partner / organization / site / group; scope resolved per permission
+- [x] Organizations, sites, groups CRUD; users and roles admin (unlock, reset password, reset MFA)
+- [x] Private CA, enrollment tokens, CSR enrollment, mTLS gateway, certificate renewal and revocation (real TLS in tests; verified with the real Go agent)
 - [ ] Agent: service install (3 OSes), enroll, mTLS, reconnect/backoff, heartbeat, inventory
-- [ ] Hash-chained append-only audit log, export, verification
+- [x] Hash-chained append-only audit log (DB triggers), export, on-demand + daily verification
 - [ ] Dashboard: login/MFA, tenants, devices list/detail (live status), enrollment, users/roles, audit
-- [ ] Tests: auth, tenant isolation (every endpoint), gateway mTLS, audit chain
+- [x] Tests: auth, tenant isolation generated over every endpoint, gateway mTLS, audit chain
 - [ ] Installers: MSI (WiX), pkg, deb/rpm with token parameter
 
 ## Phase 2: Remote scripts
 
-- [ ] Script library with immutable versions, typed parameters
-- [ ] Run on devices / group / site / organization / saved filter; cron schedules in the organization time zone
+- [x] Script library with immutable versions, typed parameters
+- [x] Run on devices / group / site / organization / saved filter; cron schedules in the organization time zone
 - [ ] Run as system or logged-in user; timeouts; cancellation; per-device and per-job concurrency limits
-- [ ] Signed dispatch (Ed25519, nonce, expiry), agent-side verification and replay protection
-- [ ] Live output streaming, history per device, output cap with truncation flag
-- [ ] Step-up for >10 devices or a whole organization
+- [x] Signed dispatch (Ed25519, nonce, expiry), agent-side verification and replay protection; C#→Go interop vectors
+- [x] Live output streaming, history per device, output cap with truncation flag (server enforces the cap too)
+- [x] Step-up for >10 devices or a whole organization
 - [ ] Windows signed-PowerShell-only mode
 - [ ] Dashboard: script editor, run dialog, live output, job/run history, schedules
 
@@ -93,4 +93,4 @@ Verification environment: macOS (Apple Silicon) dev machine, local PostgreSQL 16
 
 ## Needs your environment (cannot be verified here)
 
-Filled in at the end of the build.
+Final list at the end of the build. Known so far: anything on Windows; macOS root/launchd paths; code signing and notarisation; Azure deployment; CI runs on GitHub.

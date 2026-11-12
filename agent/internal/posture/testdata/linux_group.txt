@@ -1,0 +1,8 @@
+root:x:0:
+daemon:x:1:
+adm:x:4:alice
+sudo:x:27:alice,bob
+wheel:x:10:bob, erin
+users:x:100:alice,bob,dave
+admin:x:115:
+docker:x:998:dave

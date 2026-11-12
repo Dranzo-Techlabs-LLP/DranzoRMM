@@ -58,7 +58,7 @@ public static class TenantEndpoints
             return Results.Created($"/api/v1/organizations/{org.Id}", new { org.Id, org.Name });
         }).RequirePermission(Permissions.TenantsManage, partnerWide: true);
 
-        api.MapPatch("/organizations/{id:guid}", async (Guid id, OrgRequest req, Ctx c, CancellationToken ct) =>
+        api.MapPatch("/organizations/{id:guid}", async (Guid id, OrgRequest req, Ctx c, Microsoft.Extensions.Options.IOptions<DranzoOptions> opt, TimeProvider clock, CancellationToken ct) =>
         {
             var org = await c.Db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
             if (org is null || !c.Tenant.CoversOrganization(id))
@@ -88,6 +88,13 @@ public static class TenantEndpoints
                     return Api.BadRequest("consentMode must be none, notify or require.");
                 }
                 org.ConsentMode = consent;
+            }
+            var weakened = (req.ConsentMode is not null && org.ConsentMode < c.Db.Entry(org).Property(o => o.ConsentMode).OriginalValue)
+                || (req.RequireSignedPowerShell == false && org.RequireSignedPowerShell);
+            // Lowering the consent mode or dropping the signed-PowerShell rule weakens client protection: step-up.
+            if (weakened && !StepUp.IsFresh(c.Who, opt.Value, clock))
+            {
+                return StepUp.Required();
             }
             org.RequireSignedPowerShell = req.RequireSignedPowerShell ?? org.RequireSignedPowerShell;
             await c.Db.SaveChangesAsync(ct);

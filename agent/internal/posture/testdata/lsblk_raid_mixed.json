@@ -1,0 +1,14 @@
+{
+   "blockdevices": [
+      {"name":"sda", "type":"disk", "fstype":"crypto_LUKS", "mountpoints":[null],
+         "children": [
+            {"name":"crypt_a", "type":"crypt", "fstype":"linux_raid_member", "mountpoints":[null],
+               "children": [ {"name":"md0", "type":"raid1", "fstype":"ext4", "mountpoints":["/"]} ]
+            }
+         ]
+      },
+      {"name":"sdb", "type":"disk", "fstype":"linux_raid_member", "mountpoints":[null],
+         "children": [ {"name":"md0", "type":"raid1", "fstype":"ext4", "mountpoints":["/"]} ]
+      }
+   ]
+}

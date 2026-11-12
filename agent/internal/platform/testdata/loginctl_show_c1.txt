@@ -1,0 +1,7 @@
+Name=gdm
+Remote=no
+Type=wayland
+Class=greeter
+Active=no
+State=online
+Seat=seat0

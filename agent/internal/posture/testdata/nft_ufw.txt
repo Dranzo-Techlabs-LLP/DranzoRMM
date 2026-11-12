@@ -1,0 +1,22 @@
+table ip filter {
+	chain ufw-before-input {
+		iifname "lo" counter packets 12 bytes 880 accept
+		ct state related,established counter packets 4410 bytes 5123456 accept
+		ct state invalid counter packets 0 bytes 0 drop
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy drop;
+		counter packets 5120 bytes 6001234 jump ufw-before-logging-input
+		counter packets 5120 bytes 6001234 jump ufw-before-input
+		counter packets 97 bytes 5432 jump ufw-after-input
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy drop;
+	}
+
+	chain OUTPUT {
+		type filter hook output priority filter; policy accept;
+	}
+}

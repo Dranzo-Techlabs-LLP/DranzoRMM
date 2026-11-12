@@ -1,0 +1,6 @@
+Name              ID             Version       Quelle
+-----------------------------------------------------
+7-Zip 24.08 (x64) 7zip.7zip      24.08         winget
+Git               Git.Git        2.46.0        winget
+Google Chrome     Google.Chrome  130.0.6723.92 winget
+Microsoft Edge    Microsoft.Edge 130.0.2849.68 winget

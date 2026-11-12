@@ -1,0 +1,10 @@
+{
+   "blockdevices": [
+      {"name":"vda", "type":"disk", "fstype":null, "mountpoints":[null],
+         "children": [
+            {"name":"vda1", "type":"part", "fstype":null, "mountpoints":[null]}
+         ]
+      },
+      {"name":"nbd0", "type":"disk", "fstype":null, "mountpoints":[null]}
+   ]
+}

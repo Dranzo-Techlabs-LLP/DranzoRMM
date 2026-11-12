@@ -1,0 +1,10 @@
++-o J413AP  <class IOPlatformExpertDevice, id 0x100000254, registered, matched, active, busy 0 (58071 ms), retain 40>
+    {
+      "IOPolledInterface" = "AppleARMWatchdogTimerHibernateHandler is not serializable"
+      "IOPlatformSerialNumber" = "FVFXK0TESTQ6"
+      "IOBusyInterest" = "IOCommand is not serializable"
+      "target-type" = <"J413">
+      "IOPlatformUUID" = "0A1B2C3D-4E5F-5A6B-8C7D-9E0F1A2B3C4D"
+      "manufacturer" = <"Apple Inc.">
+      "model" = <"Mac14,2">
+    }

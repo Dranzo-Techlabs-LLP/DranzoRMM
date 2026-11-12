@@ -1,0 +1,3 @@
+Fedora Media Writer	org.fedoraproject.MediaWriter	5.1.2
+GIMP	org.gimp.GIMP	2.10.38
+No Version App	com.example.NoVersion	

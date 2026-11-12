@@ -27,6 +27,11 @@ case "${1:-}" in
   *) ;;
 esac
 
+# Files the self-updater keeps next to the binary are not owned by the package.
+case "${1:-}" in
+  remove|purge|0) rm -f -- /usr/bin/dranzo-agent.previous /usr/bin/dranzo-agent.new /usr/bin/dranzo-agent.failed ;;
+esac
+
 if [ "$purge" = yes ]; then
   # Fixed, literal paths only.
   rm -rf -- "$STATE_DIR" "$CONFIG_DIR"

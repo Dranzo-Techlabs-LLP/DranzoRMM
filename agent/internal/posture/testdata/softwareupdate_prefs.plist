@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AutomaticDownload</key>
+	<true/>
+	<key>ConfigDataInstall</key>
+	<false/>
+	<key>CriticalUpdateInstall</key>
+	<integer>1</integer>
+	<key>LastAttemptSystemVersion</key>
+	<string>26.6.2 (25G83)</string>
+	<key>LastBackgroundSuccessfulDate</key>
+	<date>2026-11-10T05:12:01Z</date>
+	<key>LastResultCode</key>
+	<integer>2</integer>
+	<key>Ratio</key>
+	<real>0.5</real>
+	<key>Blob</key>
+	<data>AAEC</data>
+</dict>
+</plist>

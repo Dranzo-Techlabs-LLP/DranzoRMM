@@ -1,0 +1,7 @@
+Name=alice
+Remote=no
+Type=wayland
+Class=user
+Active=yes
+State=active
+Seat=seat0

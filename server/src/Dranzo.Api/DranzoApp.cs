@@ -169,7 +169,8 @@ public static class DranzoApp
 
         if (builder.Configuration.GetValue<bool>("Dranzo:TrustForwardedHeaders"))
         {
-            app.UseForwardedHeaders();
+            // Agents connect directly (mTLS end to end); never let them claim another address.
+            app.UseWhen(ctx => ctx.Features.Get<ITlsHandshakeFeature>() is null, b => b.UseForwardedHeaders());
         }
         app.Use(async (ctx, next) =>
         {
@@ -187,6 +188,17 @@ public static class DranzoApp
             if (ctx.Request.Path.StartsWithSegments("/api"))
             {
                 h.CacheControl = "no-store";
+            }
+            await next();
+        });
+        // Cross-site WebSocket hijacking: the hub's upgrade is a GET without a CSRF header, so require a same-host Origin.
+        app.Use(async (ctx, next) =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/hubs") && ctx.Request.Headers.Origin.ToString() is { Length: > 0 } origin
+                && (!Uri.TryCreate(origin, UriKind.Absolute, out var o) || !string.Equals(o.Host, ctx.Request.Host.Host, StringComparison.OrdinalIgnoreCase)))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
             }
             await next();
         });

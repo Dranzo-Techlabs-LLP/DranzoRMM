@@ -1,0 +1,6 @@
+package-id: com.apple.pkg.CLTools_SDK_macOS13
+version: 26.6.0.0.1781586384
+volume: /
+location: /
+install-time: 1783591559
+groups: com.apple.FindSystemFiles.pkg-group 

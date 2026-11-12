@@ -1,0 +1,5 @@
+overlay|/|overlay
+proc|/proc|proc
+tmpfs|/dev|tmpfs
+/dev/vda1|/etc/hosts|ext4
+shm|/dev/shm|tmpfs

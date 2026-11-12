@@ -146,7 +146,7 @@ public sealed class AuthService(
         {
             return null;
         }
-        if (!VerifyTotp(user, code))
+        if (!await VerifyTotpAsync(user, code, ct))
         {
             await RegisterFailureAsync(user, "bad_totp_enrollment", ip, ct);
             return null;
@@ -169,7 +169,7 @@ public sealed class AuthService(
         var ok = false;
         if (!string.IsNullOrWhiteSpace(code))
         {
-            ok = VerifyTotp(user, code);
+            ok = await VerifyTotpAsync(user, code, ct);
         }
         else if (!string.IsNullOrWhiteSpace(recoveryCode))
         {
@@ -190,7 +190,7 @@ public sealed class AuthService(
     }
 
     /// <summary>Verifies a TOTP code and burns its time step so it cannot be replayed.</summary>
-    public bool VerifyTotp(User user, string code)
+    public async Task<bool> VerifyTotpAsync(User user, string code, CancellationToken ct)
     {
         code = code.Replace(" ", "", StringComparison.Ordinal).Trim();
         if (user.TotpSecretProtected is null || code.Length != 6 || !code.All(char.IsAsciiDigit))
@@ -207,7 +207,13 @@ public sealed class AuthService(
         {
             return false;
         }
+        // Burn the step in the database first: two concurrent requests with the same code cannot both pass.
+        if (await db.Users.IgnoreQueryFilters().Where(u => u.Id == user.Id && u.LastTotpStep < step).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastTotpStep, step), ct) != 1)
+        {
+            return false;
+        }
         user.LastTotpStep = step;
+        db.Entry(user).Property(u => u.LastTotpStep).IsModified = false;
         return true;
     }
 
@@ -262,7 +268,7 @@ public sealed class AuthService(
         {
             return false;
         }
-        if (!VerifyTotp(user, code))
+        if (!await VerifyTotpAsync(user, code, ct))
         {
             await RegisterFailureAsync(user, "bad_step_up", session.Ip, ct);
             return false;

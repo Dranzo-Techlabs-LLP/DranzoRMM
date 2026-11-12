@@ -139,7 +139,7 @@ Columns: **Threat** (who, how) · **Mitigations that exist today** · **Residual
 | STRIDE | Threat | Exists today | Residual risk | Planned |
 |---|---|---|---|---|
 | T | SQL injection. | EF Core LINQ and interpolated-parameter SQL only (`S/Dranzo.Infrastructure/Audit/AuditLog.cs` uses `ExecuteSqlAsync` with an interpolated parameter). | Any future raw SQL string. | - |
-| I | **T5 reads the database or a backup.** | Passwords PBKDF2-hashed; session tokens, API-key secrets and enrolment tokens stored as SHA-256 hashes of high-entropy values; TOTP secrets encrypted with ASP.NET Data Protection (`AuthService.cs`); the CA and signing keys are **not** in the database (`KeyStore.cs`). | (1) **The Data Protection key ring is stored in the same database, unencrypted** (`DranzoApp.cs:83` `PersistKeysToDbContext`, no `ProtectKeysWith...`): a reader can decrypt every TOTP secret and forge login-challenge tokens, reducing MFA to the password. (2) **Recovery codes are 40-bit values hashed with one unsalted SHA-256** (`AuthService.cs` `CompleteTotpEnrollmentAsync`): trivially brute-forced offline from a dump. (3) Script bodies, job output and inventory are plaintext. | **Pre-production: protect the key ring with a Key Vault key** (`ProtectKeysWithAzureKeyVault`) or keep it outside the database; longer recovery codes with a slow hash. |
+| I | **T5 reads the database or a backup.** | Passwords PBKDF2-hashed; session tokens, API-key secrets and enrolment tokens stored as SHA-256 hashes of high-entropy values; TOTP secrets encrypted with ASP.NET Data Protection (`AuthService.cs`); the CA and signing keys are **not** in the database (`KeyStore.cs`). | (1) **The Data Protection key ring is stored in the same database, unencrypted** (`DranzoApp.cs:83` `PersistKeysToDbContext`, no `ProtectKeysWith...`): a reader can decrypt every TOTP secret and forge login-challenge tokens, reducing MFA to the password. (2) **Recovery codes are 80-bit values hashed with one unsalted SHA-256** (`AuthService.cs` `CompleteTotpEnrollmentAsync`): trivially brute-forced offline from a dump. (3) Script bodies, job output and inventory are plaintext. | **Pre-production: protect the key ring with a Key Vault key** (`ProtectKeysWithAzureKeyVault`) or keep it outside the database; longer recovery codes with a slow hash. |
 | T | **T5 writes to the database.** | Signatures are created by the server at send time from the key store, so rows alone cannot make an agent execute anything. | A writer can still: insert a role assignment or session row for themselves, queue `JobRun`s that the dispatcher will then **sign and send** (`S/Dranzo.Api/Jobs/JobDispatcher.cs:162`), swap a blob's recorded hash, flip a device back to `Active`. **Database write access is equivalent to technician-level control of every tenant.** | Separate least-privilege DB role for the app; row-level integrity for jobs (sign the job at creation with the requester's session, verify at dispatch) is not scheduled. |
 | R | T5 edits the audit log. | See 4.13. | See 4.13. | - |
 | D | Storage exhaustion by output/inventory. | Output caps, snapshot pruning (`CoreProcessors.cs` `KeepSnapshots`). | No global quotas per tenant. | - |
@@ -293,3 +293,26 @@ Incident procedure: `docs/RUNBOOK.md` section 8.1.
 | 10 | Single process / in-process registry: capacity and isolation limit | 4.4, 5 | Accept for pilot |
 | 11 | Windows agent does not verify ACLs on its key files | 4.1 | Yes |
 | 12 | Forwarded-header trust is all-or-nothing | 4.5 | Yes if any listener is directly reachable |
+
+
+## Independent review, 2026-11-12
+
+An independent security review of the server (read-only, with proof-of-concept tests against the real server
+fixture) reported 8 confirmed and several suspected issues. All were fixed; each has a regression test in
+`server/tests/Dranzo.Tests/SecurityRegressionTests.cs`, and every original proof of concept now fails.
+
+| # | Severity | Issue | Fix |
+|---|---|---|---|
+| F7 | High | One agent could burn server CPU through vulnerability matching (23.6 s per message). | Per-type size/rate limits on heavy reports, unchanged-report skip, matching indexed by product with a hard work budget (1.0 s worst case measured). |
+| F1 | High | Org-scoped technician could delete site/group policy assignments protecting another organization. | Assignment delete/list check the target site/group against the caller's scope. |
+| F9 | High (MeshCentral) | Remote-desktop link signs in as a per-organization MeshCentral account, wider than a site/group technician's scope; shared-group fallback. | Link only for callers with organization-wide remote-desktop scope; no shared-group fallback unless `Mesh:AllowSharedUser`; step-up for MeshAgent install. **Residual:** the MeshCentral web session can outlive the DranzoRMM session and the MeshCentral account sees the whole organization. A per-session, per-node MeshCentral user via its API is the planned fix. |
+| F2 | Medium | `users.manage` alone could reset a Partner Admin's password/MFA. | User management refuses targets holding permissions the caller lacks. |
+| F3 | Medium | An agent in one organization defined patch severity/category used by another organization's auto-approval. | Patch catalog is per organization; at most 500 new entries per report. **Residual:** a compromised agent can still mislabel updates for its own organization. |
+| F4 | Medium | The previous (possibly stolen) certificate could renew and evict the device. | Only the current certificate can renew; attempts raise an `agent.tamper` alert. |
+| F5 | Medium | Alert/audit/notification flooding from one agent (64 invented disks per message). | One disk alert per device; per-type rate limits; smaller per-type size caps. |
+| F6 | Medium | `SubscribeJob` streamed other organizations' run results. | Job group only receives `jobChanged`; clients re-read through the filtered API. |
+| F8 | Low | Hub ignored idle timeout, disabled users and forced password change. | Hub calls re-check the full session rules and refresh activity. |
+| F10 | Low/Medium | Consent mode / signed-PowerShell downgrades without step-up. | Step-up for downgrades. |
+| F11 | Low | Schedules kept running with a removed creator's authority; forced-reboot windows with `patches.approve` only. | Schedules re-check the creator's current scope (disable + audit otherwise); re-enable needs step-up; patch policies need `patches.install`, forced reboot needs step-up. |
+| F12 | Low | Audit attribution gaps (API keys, session ended by another user, uninstall revocation). | Correct actor recorded in each path. |
+| — | Low | TOTP replay race, revocation race, forwarded headers on the agent listener, hub cross-origin upgrade, NAT64/6to4/Teredo/Azure wireserver SSRF ranges, URL/path package ids. | Atomic step burn; status re-check after registration; forwarded headers only on the dashboard listener; same-host Origin check; ranges blocked; ids rejected. |

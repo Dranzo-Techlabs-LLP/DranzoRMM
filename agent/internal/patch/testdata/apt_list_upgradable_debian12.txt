@@ -1,0 +1,3 @@
+Listing...
+libssl3/oldstable-security 3.0.22-1~deb12u2 arm64 [upgradable from: 3.0.20-1~deb12u2]
+openssl/oldstable-security 3.0.22-1~deb12u2 arm64 [upgradable from: 3.0.20-1~deb12u2]

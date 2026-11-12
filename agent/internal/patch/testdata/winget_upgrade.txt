@@ -1,0 +1,12 @@
+   -    \    |                                                                                 Name                                                              Id                           Version       Available     Source
+---------------------------------------------------------------------------------------------------------------------------------
+7-Zip 24.08 (x64)                                                 7zip.7zip                    24.08         24.09         winget
+Git                                                               Git.Git                      2.46.0        2.47.0        winget
+Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.40.338… Microsoft.VCRedist.2015+.x64 14.40.33810.0 14.42.34433.0 winget
+3 upgrades available.
+
+The following packages have an upgrade available, but require explicit targeting for upgrade:
+Name                        Id              Version Available Source
+--------------------------------------------------------------------
+Mozilla Firefox (x64 en-US) Mozilla.Firefox 131.0   132.0.1   winget
+2 package(s) have version numbers that cannot be determined. Use --include-unknown to see all results.

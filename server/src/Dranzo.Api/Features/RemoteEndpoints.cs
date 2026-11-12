@@ -136,7 +136,7 @@ public static class RemoteEndpoints
             {
                 return Api.NotFound();
             }
-            await sessions.EndAsync(id, s.UserId == c.Who.UserId ? "ended by technician" : $"ended by {c.Who.Name}", ct);
+            await sessions.EndAsync(id, s.UserId == c.Who.UserId ? "ended by technician" : $"ended by {c.Who.Name}", ct, c.Who.UserId, c.Who.Name);
             return Results.NoContent();
         }).RequirePermission(Permissions.SessionsRead);
 
@@ -244,6 +244,12 @@ public static class RemoteEndpoints
             {
                 return Api.Conflict("The remote desktop agent is not installed on this device yet.");
             }
+            // The MeshCentral account sees the organization's whole Mesh device group, so the link may only be handed to
+            // someone whose remote-desktop scope already covers the whole organization.
+            if (!c.Tenant.CoversOrganization(device.OrganizationId))
+            {
+                return Api.Error(403, "forbidden", "Remote desktop needs remote-desktop rights over the whole organization (the MeshCentral account is per organization).");
+            }
             if (mesh.UserFor(org) is not { } meshUser)
             {
                 return Api.Conflict("This organization has no MeshCentral account configured. A shared account would expose other organizations' devices, so it is refused.");
@@ -261,7 +267,8 @@ public static class RemoteEndpoints
                 return Api.NotFound();
             }
             var org = await c.Db.Organizations.IgnoreQueryFilters().AsNoTracking().FirstAsync(o => o.Id == device.OrganizationId && o.PartnerId == c.Who.PartnerId, ct);
-            var group = org.MeshGroupId ?? opt.Value.Mesh.MeshId;
+            // Never fall back to a group shared by several organizations unless explicitly allowed (single-client partners).
+            var group = org.MeshGroupId ?? (opt.Value.Mesh.AllowSharedUser ? opt.Value.Mesh.MeshId : null);
             if (!mesh.Configured || string.IsNullOrEmpty(group))
             {
                 return Api.Conflict("MeshCentral is not configured for this organization.");
@@ -289,7 +296,7 @@ public static class RemoteEndpoints
                 new { blobId = stored.Id, sha256 = stored.Sha256, sizeBytes = stored.SizeBytes, fileName }, 900, ContentSha256: stored.Sha256), [device], c.Who.PartnerId, c.Who.UserId, c.Who.Name, ct);
             await c.Audit("mesh.install", organizationId: device.OrganizationId, deviceId: id, targetType: "job", targetId: created.Job.Id, contentSha256: stored.Sha256, ct: ct);
             return Results.Created($"/api/v1/jobs/{created.Job.Id}", new { jobId = created.Job.Id });
-        }).RequirePermission(Permissions.RemoteDesktop);
+        }).RequirePermission(Permissions.RemoteDesktop).RequireStepUp();
 
         api.MapPatch("/organizations/{id:guid}/mesh", async (Guid id, MeshOrgRequest req, Ctx c, CancellationToken ct) =>
         {

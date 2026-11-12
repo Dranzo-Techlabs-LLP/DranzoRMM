@@ -1,0 +1,28 @@
+{
+   "blockdevices": [
+      {"name":"loop0", "type":"loop", "fstype":"squashfs", "mountpoints":["/snap/core22/1621"]},
+      {"name":"sr0", "type":"rom", "fstype":null, "mountpoints":[null]},
+      {"name":"nvme0n1", "type":"disk", "fstype":null, "mountpoints":[null],
+         "children": [
+            {"name":"nvme0n1p1", "type":"part", "fstype":"vfat", "mountpoints":["/boot/efi"]},
+            {"name":"nvme0n1p2", "type":"part", "fstype":"ext4", "mountpoints":["/boot"]},
+            {"name":"nvme0n1p3", "type":"part", "fstype":"crypto_LUKS", "mountpoints":[null],
+               "children": [
+                  {"name":"dm_crypt-0", "type":"crypt", "fstype":"LVM2_member", "mountpoints":[null],
+                     "children": [
+                        {"name":"ubuntu--vg-root", "type":"lvm", "fstype":"ext4", "mountpoints":["/"]},
+                        {"name":"ubuntu--vg-swap", "type":"lvm", "fstype":"swap", "mountpoints":["[SWAP]"]},
+                        {"name":"ubuntu--vg-home", "type":"lvm", "fstype":"ext4", "mountpoints":["/home"]}
+                     ]
+                  }
+               ]
+            }
+         ]
+      },
+      {"name":"sda", "type":"disk", "fstype":null, "mountpoints":[null],
+         "children": [
+            {"name":"sda1", "type":"part", "fstype":"xfs", "mountpoints":["/srv/data"]}
+         ]
+      }
+   ]
+}

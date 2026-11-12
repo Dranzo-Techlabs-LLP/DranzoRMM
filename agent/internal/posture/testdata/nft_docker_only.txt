@@ -1,0 +1,32 @@
+table ip nat {
+	chain DOCKER {
+		iifname "docker0" counter packets 0 bytes 0 return
+	}
+
+	chain POSTROUTING {
+		type nat hook postrouting priority srcnat; policy accept;
+		oifname != "docker0" ip saddr 172.17.0.0/16 counter packets 3 bytes 180 masquerade
+	}
+
+	chain PREROUTING {
+		type nat hook prerouting priority dstnat; policy accept;
+		fib daddr type local counter packets 20 bytes 1200 jump DOCKER
+	}
+}
+table ip filter {
+	chain DOCKER-USER {
+		counter packets 0 bytes 0 return
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy drop;
+		counter packets 0 bytes 0 jump DOCKER-USER
+		oifname "docker0" ct state related,established counter packets 0 bytes 0 accept
+		iifname "docker0" oifname != "docker0" counter packets 0 bytes 0 drop
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		iifname "lo" accept
+	}
+}

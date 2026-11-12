@@ -54,21 +54,23 @@ public sealed class PatchStateProcessor(DranzoDbContext db, AlertEngine alerts, 
             .GroupBy(i => (i.Source, i.UpdateId)).Select(g => g.First()).ToList();
 
         var keys = reported.Select(r => r.UpdateId).ToList();
-        var catalog = await db.PatchCatalog.Where(e => e.PartnerId == device.PartnerId && keys.Contains(e.UpdateId)).ToListAsync(ct);
+        var catalog = await db.PatchCatalog.Where(e => e.OrganizationId == device.OrganizationId && keys.Contains(e.UpdateId)).ToListAsync(ct);
         // Several devices often report the same new update at the same moment: insert catalog rows conflict-safe, then reload.
-        var missing = reported.Where(r => !catalog.Any(e => e.Source == r.Source && e.UpdateId == r.UpdateId)).ToList();
+        // At most 500 new catalog entries per report: a device cannot grow the catalog without bound.
+        var missing = reported.Where(r => !catalog.Any(e => e.Source == r.Source && e.UpdateId == r.UpdateId)).Take(500).ToList();
+        reported = [.. reported.Where(r => catalog.Any(e => e.Source == r.Source && e.UpdateId == r.UpdateId) || missing.Contains(r))];
         foreach (var r in missing)
         {
             var title = r.Title.Length > 0 ? r.Title : r.UpdateId;
             await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO "PatchCatalog" ("Id", "PartnerId", "Source", "UpdateId", "Title", "Kb", "Category", "Severity", "FirstSeenAt")
-                VALUES ({Guid.NewGuid()}, {device.PartnerId}, {r.Source}, {r.UpdateId}, {title}, {r.Kb}, {r.Category}, {r.Severity}, {now})
-                ON CONFLICT ("PartnerId", "Source", "UpdateId") DO NOTHING
+                INSERT INTO "PatchCatalog" ("Id", "PartnerId", "OrganizationId", "Source", "UpdateId", "Title", "Kb", "Category", "Severity", "FirstSeenAt")
+                VALUES ({Guid.NewGuid()}, {device.PartnerId}, {device.OrganizationId}, {r.Source}, {r.UpdateId}, {title}, {r.Kb}, {r.Category}, {r.Severity}, {now})
+                ON CONFLICT ("PartnerId", "OrganizationId", "Source", "UpdateId") DO NOTHING
                 """, ct);
         }
         if (missing.Count > 0)
         {
-            catalog = await db.PatchCatalog.Where(e => e.PartnerId == device.PartnerId && keys.Contains(e.UpdateId)).ToListAsync(ct);
+            catalog = await db.PatchCatalog.Where(e => e.OrganizationId == device.OrganizationId && keys.Contains(e.UpdateId)).ToListAsync(ct);
         }
         var policy = PatchRules.PolicyFor(await db.PatchPolicies.Where(p => p.PartnerId == device.PartnerId).ToListAsync(ct), device.OrganizationId);
         var states = await db.DevicePatchStates.Include(s => s.CatalogEntry).Where(s => s.DeviceId == device.Id).ToListAsync(ct);
@@ -393,7 +395,7 @@ public static class PatchEndpoints
             Results.Ok(await c.Db.PatchPolicies.AsNoTracking().OrderBy(p => p.Name).ToListAsync(ct)))
             .RequirePermission(Permissions.PatchesRead);
 
-        api.MapPost("/patch-policies", async (PolicyRequest req, Ctx c, CancellationToken ct) =>
+        api.MapPost("/patch-policies", async (PolicyRequest req, Ctx c, IOptions<DranzoOptions> opt, TimeProvider clock, CancellationToken ct) =>
         {
             if (req.OrganizationId is { } org ? !c.Tenant.CoversOrganization(org) || !await c.Db.Organizations.AnyAsync(o => o.Id == org, ct) : !c.Tenant.AllOrgs)
             {
@@ -405,13 +407,17 @@ public static class PatchEndpoints
             {
                 return Api.BadRequest(problem);
             }
+            if (policy.RebootMode == "force" && !StepUp.IsFresh(c.Who, opt.Value, clock))
+            {
+                return StepUp.Required(); // organization-wide forced restarts
+            }
             c.Db.PatchPolicies.Add(policy);
             await c.Db.SaveChangesAsync(ct);
             await c.Audit("patch_policy.create", organizationId: policy.OrganizationId, targetType: "patch_policy", targetId: policy.Id, detail: new { policy.Name, policy.Enabled, policy.AutoApproveSeverities, policy.AutoApproveCategories, policy.Sources, policy.DeferDays, policy.WindowCron, policy.WindowMinutes, policy.RebootMode }, ct: ct);
             return Results.Created($"/api/v1/patch-policies/{policy.Id}", new { policy.Id });
-        }).RequirePermission(Permissions.PatchesApprove);
+        }).RequirePermission(Permissions.PatchesInstall);
 
-        api.MapPatch("/patch-policies/{id:guid}", async (Guid id, PolicyRequest req, Ctx c, CancellationToken ct) =>
+        api.MapPatch("/patch-policies/{id:guid}", async (Guid id, PolicyRequest req, Ctx c, IOptions<DranzoOptions> opt, TimeProvider clock, CancellationToken ct) =>
         {
             var policy = await c.Db.PatchPolicies.FirstOrDefaultAsync(p => p.Id == id, ct);
             if (policy is null || (policy.OrganizationId is null && !c.Tenant.AllOrgs))
@@ -423,10 +429,14 @@ public static class PatchEndpoints
             {
                 return Api.BadRequest(problem);
             }
+            if (policy.RebootMode == "force" && !StepUp.IsFresh(c.Who, opt.Value, clock))
+            {
+                return StepUp.Required(); // organization-wide forced restarts
+            }
             await c.Db.SaveChangesAsync(ct);
             await c.Audit("patch_policy.update", organizationId: policy.OrganizationId, targetType: "patch_policy", targetId: id, detail: new { policy.Name, policy.Enabled, policy.AutoApproveSeverities, policy.AutoApproveCategories, policy.Sources, policy.DeferDays, policy.WindowCron, policy.WindowMinutes, policy.RebootMode }, ct: ct);
             return Results.NoContent();
-        }).RequirePermission(Permissions.PatchesApprove);
+        }).RequirePermission(Permissions.PatchesInstall);
 
         api.MapDelete("/patch-policies/{id:guid}", async (Guid id, Ctx c, CancellationToken ct) =>
         {
@@ -439,7 +449,7 @@ public static class PatchEndpoints
             await c.Db.SaveChangesAsync(ct);
             await c.Audit("patch_policy.delete", organizationId: policy.OrganizationId, targetType: "patch_policy", targetId: id, detail: new { policy.Name }, ct: ct);
             return Results.NoContent();
-        }).RequirePermission(Permissions.PatchesApprove);
+        }).RequirePermission(Permissions.PatchesInstall);
     }
 
     private static async Task<string?> ApplyAsync(PatchPolicy p, PolicyRequest req, Ctx c, bool creating, CancellationToken ct)

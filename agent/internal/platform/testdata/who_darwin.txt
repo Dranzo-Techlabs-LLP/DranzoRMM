@@ -1,0 +1,3 @@
+shinky           console      Nov 11 09:00 
+shinky           ttys000      Nov 11 09:01 
+admin            ttys003      Nov 11 10:15 (10.0.0.5)

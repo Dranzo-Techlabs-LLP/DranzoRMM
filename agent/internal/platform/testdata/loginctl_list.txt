@@ -1,0 +1,4 @@
+      2 1000 alice seat0 tty2  active no  -    
+     c1  120 gdm   seat0 tty1  online no  -    
+      5 1001 bob   -     pts/0 active no  -    
+   bad!id 0 x

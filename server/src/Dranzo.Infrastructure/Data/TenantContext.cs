@@ -67,4 +67,8 @@ public sealed class TenantContext
     public bool CoversOrganization(Guid organizationId) => IsSystem || AllOrgs || OrgIds.Contains(organizationId);
 
     public bool CoversSite(Guid organizationId, Guid siteId) => CoversOrganization(organizationId) || SiteIds.Contains(siteId);
+
+    /// <summary>Same rule as the device query filter, for devices already in memory.</summary>
+    public bool CoversDevice(Guid partnerId, Guid organizationId, Guid siteId, Guid? groupId) =>
+        IsSystem || (partnerId == PartnerId && (CoversSite(organizationId, siteId) || (groupId is { } g && GroupIds.Contains(g))));
 }

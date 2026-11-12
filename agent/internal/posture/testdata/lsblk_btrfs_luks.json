@@ -1,0 +1,16 @@
+{
+   "blockdevices": [
+      {"name":"zram0", "type":"disk", "fstype":"swap", "mountpoints":["[SWAP]"]},
+      {"name":"nvme0n1", "type":"disk", "fstype":null, "mountpoints":[null],
+         "children": [
+            {"name":"nvme0n1p1", "type":"part", "fstype":"vfat", "mountpoints":["/boot/efi"]},
+            {"name":"nvme0n1p2", "type":"part", "fstype":"ext4", "mountpoints":["/boot"]},
+            {"name":"nvme0n1p3", "type":"part", "fstype":"crypto_LUKS", "mountpoints":[null],
+               "children": [
+                  {"name":"luks-0a1b2c3d", "type":"crypt", "fstype":"btrfs", "mountpoints":["/home", "/"]}
+               ]
+            }
+         ]
+      }
+   ]
+}

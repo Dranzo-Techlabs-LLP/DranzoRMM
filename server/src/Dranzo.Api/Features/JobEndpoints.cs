@@ -269,12 +269,16 @@ public static class JobEndpoints
             });
         }).RequirePermission(Permissions.JobsRead);
 
-        api.MapPatch("/jobs/{id:guid}", async (Guid id, JobPatch req, Ctx c, TimeProvider clock, CancellationToken ct) =>
+        api.MapPatch("/jobs/{id:guid}", async (Guid id, JobPatch req, Ctx c, IOptions<DranzoOptions> opt, TimeProvider clock, CancellationToken ct) =>
         {
             var job = await c.Db.Jobs.FirstOrDefaultAsync(j => j.Id == id && j.Cron != null, ct);
             if (job is null)
             {
                 return Api.NotFound();
+            }
+            if (req.Enabled == true && !job.Enabled && !StepUp.IsFresh(c.Who, opt.Value, clock))
+            {
+                return StepUp.Required();
             }
             if (req.Enabled is { } enabled)
             {

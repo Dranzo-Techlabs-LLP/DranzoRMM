@@ -17,6 +17,51 @@ public sealed class AgentConnection(Guid deviceId, Guid partnerId, Guid organiza
     public Guid PartnerId { get; } = partnerId;
     public Guid OrganizationId { get; } = organizationId;
     public Guid ConnectionId { get; } = Guid.NewGuid();
+
+    /// <summary>
+    /// Heavy report types are rate-limited per connection on top of the overall token bucket: one burst of a few
+    /// messages, then about one per minute. A compromised agent cannot use them to load the server.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, (int Burst, double PerMinute, int MaxBytes)> TypeLimits = new Dictionary<string, (int, double, int)>
+    {
+        ["inventory"] = (5, 1, 512 * 1024),
+        ["software.inventory"] = (5, 1, 2 * 1024 * 1024),
+        ["posture"] = (5, 1, 512 * 1024),
+        ["patch.state"] = (5, 1, 1024 * 1024),
+        ["error"] = (10, 2, 16 * 1024),
+        ["update.status"] = (10, 4, 16 * 1024),
+    };
+
+    private readonly Dictionary<string, (double Tokens, long Last)> _typeBuckets = [];
+
+    /// <summary>Last content hash per report type, so an unchanged report is not processed again.</summary>
+    public Dictionary<string, string> LastReportHash { get; } = [];
+
+    /// <summary>False when <paramref name="type"/> is over its own limit (size or rate).</summary>
+    public bool TryConsumeType(string type, int bytes)
+    {
+        if (!TypeLimits.TryGetValue(type, out var limit))
+        {
+            return true;
+        }
+        if (bytes > limit.MaxBytes)
+        {
+            return false;
+        }
+        lock (_rateLock)
+        {
+            var now = Environment.TickCount64;
+            var (tokens, last) = _typeBuckets.TryGetValue(type, out var b) ? b : (limit.Burst, now);
+            tokens = Math.Min(limit.Burst, tokens + ((now - last) / 60_000.0 * limit.PerMinute));
+            if (tokens < 1)
+            {
+                _typeBuckets[type] = (tokens, now);
+                return false;
+            }
+            _typeBuckets[type] = (tokens - 1, now);
+            return true;
+        }
+    }
     public bool HelloReceived { get; set; }
     public string? RemoteIp { get; init; }
     public WebSocket Socket => socket;

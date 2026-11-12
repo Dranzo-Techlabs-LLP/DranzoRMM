@@ -175,17 +175,17 @@ public sealed class RemoteSessionService(DranzoDbContext db, SessionRegistry reg
     }
 
     /// <summary>Ends a session from the server side (technician, timeout, disconnect). Sends a signed <c>session.end</c>.</summary>
-    public async Task EndAsync(Guid sessionId, string reason, CancellationToken ct)
+    public async Task EndAsync(Guid sessionId, string reason, CancellationToken ct, Guid? endedById = null, string? endedByName = null)
     {
         var live = registry.Get(sessionId);
         if (live is not null)
         {
             await agents.SendAsync(live.DeviceId, envelopes.Signed("session.end", live.DeviceId, new Dictionary<string, object?> { ["sessionId"] = sessionId.ToString("D"), ["reason"] = reason }), ct);
         }
-        await FinishAsync(sessionId, RemoteSessionState.Ended, reason, null, ct);
+        await FinishAsync(sessionId, RemoteSessionState.Ended, reason, null, ct, endedById, endedByName);
     }
 
-    private async Task FinishAsync(Guid sessionId, RemoteSessionState state, string reason, string? agentIp, CancellationToken ct)
+    private async Task FinishAsync(Guid sessionId, RemoteSessionState state, string reason, string? agentIp, CancellationToken ct, Guid? endedById = null, string? endedByName = null)
     {
         var live = registry.Remove(sessionId);
         var session = await db.RemoteSessions.Include(s => s.Device).FirstOrDefaultAsync(s => s.Id == sessionId, ct);
@@ -213,8 +213,8 @@ public sealed class RemoteSessionService(DranzoDbContext db, SessionRegistry reg
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync(session.PartnerId, new AuditEntry(state == RemoteSessionState.Denied ? "session.denied" : "session.end", state is RemoteSessionState.Ended ? "success" : "failure",
             session.OrganizationId, session.DeviceId, "remote_session", session.Id.ToString(),
-            new { session.Kind, reason = session.EndReason, consentResult = session.ConsentResult, session.BytesIn, session.BytesOut, seconds = session.StartedAt is null ? 0 : (int)(session.EndedAt.Value - session.StartedAt.Value).TotalSeconds },
-            ContentSha256: session.InputSha256, ActorType: "user", ActorId: session.UserId, ActorName: session.UserName, Ip: session.Ip ?? agentIp), ct);
+            new { session.Kind, reason = session.EndReason, consentResult = session.ConsentResult, session.BytesIn, session.BytesOut, seconds = session.StartedAt is null ? 0 : (int)(session.EndedAt.Value - session.StartedAt.Value).TotalSeconds, owner = session.UserName },
+            ContentSha256: session.InputSha256, ActorType: "user", ActorId: endedById ?? session.UserId, ActorName: endedByName ?? session.UserName, Ip: session.Ip ?? agentIp), ct);
         if (wasActive)
         {
             await notifications.PublishEventAsync(session.PartnerId, session.OrganizationId, "session.ended", new { sessionId = session.Id, session.Kind, deviceId = session.DeviceId, hostname = session.Device.Hostname, user = session.UserName, reason = session.EndReason }, ct);

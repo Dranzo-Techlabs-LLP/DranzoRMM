@@ -87,6 +87,7 @@ public class PatchTests(ServerFixture fx)
         var admin = await fx.AdminAsync();
         var org = await fx.SeedOrgAsync("Win " + U);
         await using var agent = await TestAgent.EnrollAsync(fx, org.Token, "window-host");
+        await admin.StepUpAsync(); // forced restarts across an organization need step-up
         var policy = await admin.PostJsonAsync("/api/v1/patch-policies", new
         {
             name = "Critical nightly", organizationId = org.OrgId, autoApproveSeverities = new[] { "critical" }, deferDays = 2, windowCron = "0 3 * * *", windowMinutes = 60, rebootMode = "force", rebootDeadlineMinutes = 30,

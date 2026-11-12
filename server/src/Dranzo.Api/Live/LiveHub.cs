@@ -12,7 +12,8 @@ namespace Dranzo.Api.Live;
 /// Pushes live events to dashboards. A connection is placed in the groups that match the caller's
 /// <c>devices.read</c> scope; finer subscriptions (one run, one session) are checked against the caller's scope.
 /// </summary>
-public sealed class LiveHub(ScopeResolver scopes, TenantContext tenant, DranzoDbContext db, SessionRegistry sessions, RemoteSessionService remote, TimeProvider clock) : Hub
+public sealed class LiveHub(ScopeResolver scopes, TenantContext tenant, DranzoDbContext db, SessionRegistry sessions, RemoteSessionService remote,
+    Microsoft.Extensions.Options.IOptions<DranzoOptions> options, TimeProvider clock) : Hub
 {
     private async Task<CurrentPrincipal?> PrincipalAsync()
     {
@@ -24,10 +25,21 @@ public sealed class LiveHub(ScopeResolver scopes, TenantContext tenant, DranzoDb
         }
         // Re-validate the session on every hub call; it may have been revoked since the socket opened.
         var now = clock.GetUtcNow();
-        var session = await db.UserSessions.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.RevokedAt == null && s.ExpiresAt > now);
-        if (session is null)
+        var session = await db.UserSessions.IgnoreQueryFilters().FirstOrDefaultAsync(s => s.Id == sid && s.RevokedAt == null && s.ExpiresAt > now);
+        if (session is null || session.LastSeenAt.AddMinutes(options.Value.Auth.SessionIdleMinutes) <= now)
         {
             return null;
+        }
+        // Same rules as the HTTP session handler and the access middleware.
+        var account = await db.Users.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(u => u.Id == session.UserId);
+        if (account is null || account.Disabled || !account.TotpEnabled || account.MustChangePassword)
+        {
+            return null;
+        }
+        if (now - session.LastSeenAt > TimeSpan.FromSeconds(30))
+        {
+            session.LastSeenAt = now; // using the terminal counts as activity
+            await db.SaveChangesAsync();
         }
         return new CurrentPrincipal
         {
@@ -177,7 +189,9 @@ public sealed class LiveNotifier(IHubContext<LiveHub> hub, ILogger<LiveNotifier>
         new { id = d.Id, d.OrganizationId, d.SiteId, d.GroupId, d.IsOnline, d.LastSeenAt, d.Hostname, d.PendingReboot, d.ConsoleUser, d.Tags, status = d.Status.ToString().ToLowerInvariant() });
 
     public Task RunChangedAsync(JobRun r, Device d) => Task.WhenAll(
-        SendAsync([$"run:{r.Id}", $"job:{r.JobId}"], "run", new { id = r.Id, r.JobId, r.DeviceId, status = r.Status.ToString().ToLowerInvariant(), r.ExitCode, r.Message, r.Truncated, r.FinishedAt }),
+        SendAsync([$"run:{r.Id}"], "run", new { id = r.Id, r.JobId, r.DeviceId, status = r.Status.ToString().ToLowerInvariant(), r.ExitCode, r.Message, r.Truncated, r.FinishedAt }),
+        // A job can span organizations; subscribers only learn that it changed and re-read it through the filtered API.
+        SendAsync([$"job:{r.JobId}"], "jobChanged", new { jobId = r.JobId }),
         SendAsync(DeviceGroups(d.PartnerId, d.OrganizationId, d.SiteId, d.GroupId), "runSummary", new { id = r.Id, r.JobId, r.DeviceId, status = r.Status.ToString().ToLowerInvariant() }));
 
     public Task RunOutputAsync(Guid runId, int seq, string stream, string data) =>

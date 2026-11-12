@@ -43,9 +43,17 @@ public static class SafeOutbound
             var b = ip.GetAddressBytes();
             return !(b[0] == 10 || b[0] == 127 || b[0] == 0 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168)
                 || (b[0] == 169 && b[1] == 254) || (b[0] == 100 && b[1] is >= 64 and <= 127) || b[0] >= 224 || (b[0] == 192 && b[1] == 0 && b[2] == 0)
-                || (b[0] == 198 && b[1] is 18 or 19));
+                || (b[0] == 198 && b[1] is 18 or 19) || (b[0] == 192 && b[1] == 88 && b[2] == 99)
+                || (b[0] == 168 && b[1] == 63 && b[2] == 129 && b[3] == 16)); // Azure platform endpoint (wireserver)
         }
         if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6Multicast || ip.IsIPv6UniqueLocal)
+        {
+            return false;
+        }
+        // Translation/tunnel prefixes that can embed private IPv4 addresses: NAT64, 6to4, Teredo, documentation.
+        var v6 = ip.GetAddressBytes();
+        if (v6.Length == 16 && ((v6[0] == 0x00 && v6[1] == 0x64 && v6[2] == 0xff && v6[3] == 0x9b) || (v6[0] == 0x20 && v6[1] == 0x02)
+            || (v6[0] == 0x20 && v6[1] == 0x01 && v6[2] == 0x00 && v6[3] == 0x00) || (v6[0] == 0x20 && v6[1] == 0x01 && v6[2] == 0x0d && v6[3] == 0xb8)))
         {
             return false;
         }

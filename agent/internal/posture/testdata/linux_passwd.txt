@@ -1,0 +1,8 @@
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+toor:x:0:0:second root:/root:/bin/sh
+alice:x:1000:1000:Alice Example,,,:/home/alice:/bin/bash
+bob:x:1001:1001::/home/bob:/bin/bash
+carol:x:1002:27::/home/carol:/bin/bash
+dave:x:1003:1003::/home/dave:/bin/zsh
++@netgroup::::::

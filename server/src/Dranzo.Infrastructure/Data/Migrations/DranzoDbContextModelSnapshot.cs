@@ -1347,6 +1347,9 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.Property<string>("Kb")
                         .HasColumnType("text");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("PartnerId")
                         .HasColumnType("uuid");
 
@@ -1368,7 +1371,7 @@ namespace Dranzo.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PartnerId", "Source", "UpdateId")
+                    b.HasIndex("PartnerId", "OrganizationId", "Source", "UpdateId")
                         .IsUnique();
 
                     b.ToTable("PatchCatalog");
