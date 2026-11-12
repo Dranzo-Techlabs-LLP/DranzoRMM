@@ -122,7 +122,15 @@ def step(msg):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dashboard", default="http://localhost:8081")
-    ap.add_argument("--agent", choices=["compose", "native", "none"], default="compose")
+    ap.add_argument("--agent", choices=["compose", "native", "manual", "none"], default="compose",
+                    help="manual: write the token and trust files to --manual-out and wait for a device (e.g. a Windows VM) to enroll")
+    ap.add_argument("--manual-out", default=str(ROOT / "dist" / "manual-enroll"))
+    ap.add_argument("--manual-wait", type=int, default=20, help="minutes to wait for a manually installed agent")
+    ap.add_argument("--manual-server-url", help="agent gateway URL the device should use (default: --agent-url)")
+    ap.add_argument("--deploy", help="manager:packageId to install and remove through the dashboard API, e.g. winget:7zip.7zip or apt:tree")
+    ap.add_argument("--no-revoke", action="store_true", help="leave the device enrolled at the end")
+    ap.add_argument("--consent", choices=["none", "notify", "require"], default="none",
+                    help="organization consent mode; with 'require' someone must click Allow on the device for the file session")
     ap.add_argument("--agent-binary")
     ap.add_argument("--agent-url", default="https://localhost:8443", help="agent gateway URL for --agent native")
     ap.add_argument("--compose-file", default=str(ROOT / "deploy" / "docker-compose.yml"))
@@ -156,7 +164,7 @@ def main():
     step(f"signed in as {me['user']['email']} with password + TOTP")
 
     suffix = time.strftime("%H%M%S")
-    _, org = api.call("POST", "/api/v1/organizations", {"name": f"E2E Org {suffix}", "consentMode": "none"})
+    _, org = api.call("POST", "/api/v1/organizations", {"name": f"E2E Org {suffix}", "consentMode": args.consent})
     _, site = api.call("POST", "/api/v1/sites", {"organizationId": org["id"], "name": "HQ"})
     _, group = api.call("POST", "/api/v1/groups", {"siteId": site["id"], "name": "Servers"})
     _, token = api.call("POST", "/api/v1/enrollment-tokens", {"siteId": site["id"], "groupId": group["id"], "name": "e2e", "maxUses": 1})
@@ -182,12 +190,28 @@ def main():
                 os.chmod(p, 0o600)
             log = open(os.path.join(tmp, "stdout.log"), "wb")
             proc = subprocess.Popen([args.agent_binary, "run", "--foreground", "--data-dir", tmp], stdout=log, stderr=subprocess.STDOUT)
+        elif args.agent == "manual":
+            _, info = api.call("GET", "/api/v1/agent/install-info")
+            out = pathlib.Path(args.manual_out)
+            out.mkdir(parents=True, exist_ok=True)
+            os.chmod(out, 0o700)
+            (out / "ca.pem").write_text(info["caCertificatePem"])
+            (out / "trust.json").write_text(json.dumps(info["trust"]))
+            # Single-use, expires on its own; kept only in this git-ignored folder.
+            (out / "token.txt").write_text(token["token"])
+            for f in out.iterdir():
+                os.chmod(f, 0o600)
+            url = args.manual_server_url or args.agent_url
+            print(f"\n  Copy {out}/ca.pem, trust.json and token.txt to the device, then as Administrator run:\n"
+                  f"    .\\Run-DranzoWindowsTests.ps1 -Live -ServerUrl {url} -TokenFile .\\token.txt -CaFile .\\ca.pem -TrustFile .\\trust.json\n"
+                  f"  (or: dranzo-agent install --server {url} --token <token.txt> --ca-file ca.pem --trust-file trust.json)\n"
+                  f"  Waiting up to {args.manual_wait} minutes for it to come online...\n", flush=True)
 
         def online():
             _, d = api.call("GET", f"/api/v1/devices?organizationId={org['id']}&online=true")
             return d["items"][0] if d["total"] == 1 else None
 
-        device = wait_for("the agent to enroll and come online", online, timeout=240, every=2)
+        device = wait_for("the agent to enroll and come online", online, timeout=args.manual_wait * 60 if args.agent == "manual" else 240, every=3)
         step(f"agent enrolled over mTLS and is online: {device['hostname']} ({device['os']}/{device['arch']}, agent {device['agentVersion']})")
 
         detail = wait_for("inventory", lambda: (lambda d: d if d.get("inventory") else None)(api.call("GET", f"/api/v1/devices/{device['id']}")[1]), timeout=90)
@@ -195,8 +219,14 @@ def main():
         assert inv["cpu"]["logicalCores"] >= 1 and inv["memoryBytes"] > 0 and inv["disks"], "inventory looks empty"
         step(f"inventory received: {inv['os']['name']} {inv['os']['version']}, {inv['cpu']['logicalCores']} CPUs, {inv['memoryBytes'] // 2**20} MiB RAM, {len(inv['disks'])} disk(s)")
 
-        body = 'echo "dz-e2e-$((6*7)) $GREETING"\nid -u\necho to-stderr 1>&2\nexit 3\n'
-        _, script = api.call("POST", "/api/v1/scripts", {"name": f"e2e {suffix}", "language": "sh", "body": body,
+        windows = device["os"] == "windows"
+        if windows:
+            language = "powershell"
+            body = 'Write-Output ("dz-e2e-" + (6*7) + " " + $env:GREETING)\nWrite-Output ([Security.Principal.WindowsIdentity]::GetCurrent().Name)\n[Console]::Error.WriteLine("to-stderr")\nexit 3\n'
+        else:
+            language = "sh"
+            body = 'echo "dz-e2e-$((6*7)) $GREETING"\nid -u\necho to-stderr 1>&2\nexit 3\n'
+        _, script = api.call("POST", "/api/v1/scripts", {"name": f"e2e {suffix}", "language": language, "body": body,
                                                          "parameters": [{"name": "GREETING", "type": "string", "required": True}]})
         _, job = api.call("POST", "/api/v1/jobs/run-script", {"scriptId": script["id"], "target": {"deviceIds": [device["id"]]},
                                                               "parameters": {"GREETING": "hello"}, "timeoutSeconds": 60})
@@ -211,7 +241,18 @@ def main():
         assert run["status"] == "failed" and run["exitCode"] == 3, f"expected exit code 3, got {run['status']} {run['exitCode']}"
         assert "dz-e2e-42 hello" in output and "to-stderr" in output, f"unexpected output: {output!r}"
         assert run["outputSha256"] == hashlib.sha256(output.encode()).hexdigest(), "output hash mismatch"
-        step("signed script job ran on the device: live output, stderr, exit code 3 and matching output hash")
+        step(f"signed {language} job ran on the device: live output, stderr, exit code 3 and matching output hash")
+        if windows:
+            print(f"    runs as: {output.splitlines()[1] if len(output.splitlines()) > 1 else '?'}")
+            cmd_body = "@echo off\r\necho dz-cmd-%GREETING%\r\nexit /b 4\r\n"
+            _, cmd_script = api.call("POST", "/api/v1/scripts", {"name": f"e2e cmd {suffix}", "language": "cmd", "body": cmd_body,
+                                                                 "parameters": [{"name": "GREETING", "type": "string", "required": True}]})
+            _, cmd_job = api.call("POST", "/api/v1/jobs/run-script", {"scriptId": cmd_script["id"], "target": {"deviceIds": [device["id"]]},
+                                                                      "parameters": {"GREETING": "ok"}, "timeoutSeconds": 60})
+            run_id = cmd_job["runs"][0]["id"]
+            cmd_run = wait_for("the cmd run to finish", finished, timeout=90)
+            assert cmd_run["exitCode"] == 4 and "dz-cmd-ok" in "".join(c["data"] for c in cmd_run["output"]), f"cmd run: {cmd_run['status']} {cmd_run['exitCode']}"
+            step("cmd script ran: output and exit code 4")
 
         _, audit = api.call("GET", f"/api/v1/audit?deviceId={device['id']}&pageSize=100")
         actions = {e["action"] for e in audit["items"]}
@@ -242,14 +283,41 @@ def main():
         if "session.files" in caps:
             api.step_up()
             _, s = api.call("POST", f"/api/v1/devices/{device['id']}/sessions/files", {})
-            wait_for("the files session to become active", lambda: api.call("GET", f"/api/v1/sessions/{s['sessionId']}")[1]["state"] == "active", timeout=60)
-            _, listing = api.call("POST", f"/api/v1/sessions/{s['sessionId']}/files/list", {"path": "/"})
-            assert any(e["name"] in ("etc", "usr", "bin", "Users") for e in listing["entries"]), "root listing looks wrong"
+            if args.consent == "require":
+                print("    >>> On the device: a consent dialog should appear now. Click Allow. <<<", flush=True)
+            wait_for("the files session to become active", lambda: api.call("GET", f"/api/v1/sessions/{s['sessionId']}")[1]["state"] == "active", timeout=150)
+            consent_result = api.call("GET", f"/api/v1/sessions/{s['sessionId']}")[1].get("consentResult")
+            print(f"    consent result: {consent_result}")
+            _, listing = api.call("POST", f"/api/v1/sessions/{s['sessionId']}/files/list", {"path": "C:\\" if windows else "/"})
+            assert any(e["name"] in ("etc", "usr", "bin", "Users", "Windows", "Program Files") for e in listing["entries"]), "root listing looks wrong"
             api.call("POST", f"/api/v1/sessions/{s['sessionId']}/end")
             step("remote file session: consent mode applied, directory listed through a signed, session-bound job, session ended")
 
+        if args.deploy:
+            manager, package_id = args.deploy.split(":", 1)
+
+            def run_deploy(action):
+                _, j = api.call("POST", "/api/v1/software/deploy", {"action": action, "packages": {manager: package_id}, "target": {"deviceIds": [device["id"]]}})
+
+                def done():
+                    _, jd = api.call("GET", f"/api/v1/jobs/{j['jobId']}")
+                    runs = [r for r in jd["runs"] if r["status"] not in ("pending", "dispatched", "running")]
+                    return runs[-1] if runs and len(runs) == len(jd["runs"]) else None
+
+                return wait_for(f"software {action} of {package_id}", done, timeout=900, every=5)
+
+            r = run_deploy("install")
+            assert r["status"] == "succeeded", f"install failed: {r['status']} {r.get('message')}"
+            wait_for(f"{package_id} to appear in the software inventory",
+                     lambda: any(package_id.split(".")[-1].lower() in (x["name"] + " " + (x.get("packageId") or "")).lower()
+                                 for x in api.call("GET", f"/api/v1/devices/{device['id']}/software")[1]), timeout=300, every=5)
+            r = run_deploy("uninstall")
+            assert r["status"] == "succeeded", f"uninstall failed: {r['status']} {r.get('message')}"
+            step(f"deployed and removed {package_id} via {manager}; software inventory refreshed")
+
         if args.update_binary:
-            data = pathlib.Path(args.update_binary).read_bytes()
+            # The path may contain {os} and {arch}, filled in from what the device reported.
+            data = pathlib.Path(args.update_binary.format(os=device["os"], arch=device["arch"])).read_bytes()
             api.step_up()
             req = urllib.request.Request(api.base + "/api/v1/releases/upload?fileName=dranzo-agent", data=data, method="PUT")
             req.add_header("X-CSRF-Token", api.csrf)
@@ -265,6 +333,9 @@ def main():
                      lambda: any(d["state"] == "installed" for d in api.call("GET", f"/api/v1/releases/{rel['id']}/devices")[1]), timeout=120, every=3)
             step(f"signed self-update: server offered {args.update_version}, agent verified, swapped, reconnected and confirmed 'installed'")
 
+        if args.no_revoke:
+            print("PASS (device left enrolled)")
+            return
         api.step_up()
         api.call("POST", f"/api/v1/devices/{device['id']}/revoke")
         wait_for("the revoked device to go offline", lambda: not api.call("GET", f"/api/v1/devices/{device['id']}")[1]["isOnline"], timeout=60)

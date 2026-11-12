@@ -153,9 +153,10 @@ public class HardeningTests(ServerFixture fx)
         var file = await tech.GetAsync(deb.GetProperty("url").GetString()!);
         Assert.Equal(bytes, await file.Content.ReadAsByteArrayAsync());
         Assert.Equal("attachment", file.Content.Headers.ContentDisposition!.DispositionType);
-        // The raw self-update binary is not exposed through the installer route.
-        var binaryId = await fx.DbAsync(db => db.AgentReleaseBinaries.Where(b => b.Kind == "binary" && b.Sha256 == deb.GetProperty("sha256").GetString()).Select(b => b.Id).FirstAsync());
-        Assert.Equal(HttpStatusCode.NotFound, (await tech.GetAsync($"/api/v1/agent/installers/{binaryId}")).StatusCode);
+        // The plain agent program is offered too, for manual installs.
+        var plain = list.GetProperty("installers").EnumerateArray().Single(i => i.GetProperty("kind").GetString() == "binary");
+        Assert.Matches(@"^dranzo-agent-[0-9.]+-linux-amd64$", plain.GetProperty("fileName").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await tech.GetAsync(plain.GetProperty("url").GetString()!)).StatusCode);
         Assert.Contains(await tech.GetJsonAsync("/api/v1/enrollment-tokens/targets") is var t ? t.GetProperty("sites").EnumerateArray().Select(s => s.GetProperty("id").GetGuid()) : [], id => id == org.SiteId);
     }
 }

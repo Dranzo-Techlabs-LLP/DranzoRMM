@@ -135,12 +135,18 @@ public static class DeviceEndpoints
                 serverUrl = url,
                 caCertificatePem = ca.CaCertificatePem,
                 trust = new { commandKeys = new[] { new { kid = signer.KeyId, alg = "ed25519", publicKey = Convert.ToBase64String(signer.PublicKey) } } },
+                // Plain-binary commands work today. Package commands apply once signed installers are published
+                // (Releases → installers). ca.pem and trust.json are the two files shown next to these commands; the
+                // agent refuses to talk to any server it cannot verify with them.
                 commands = new
                 {
-                    windows = $"msiexec /i DranzoAgent-<arch>.msi /qn SERVERURL=\"{url}\" ENROLLTOKEN=\"<token>\"",
-                    macos = $"sudo installer -pkg DranzoAgent.pkg -target / && sudo /usr/local/bin/dranzo-agent install --server {url} --token <token>",
-                    linuxDeb = $"sudo dpkg -i dranzo-agent_<version>_<arch>.deb && sudo dranzo-agent install --server {url} --token <token>",
-                    linuxRpm = $"sudo rpm -i dranzo-agent-<version>-1.<x86_64|aarch64>.rpm && sudo dranzo-agent install --server {url} --token <token>",
+                    windows = $"dranzo-agent.exe install --server {url} --token <token> --ca-file ca.pem --trust-file trust.json   (elevated prompt)",
+                    macos = $"sudo ./dranzo-agent install --server {url} --token <token> --ca-file ca.pem --trust-file trust.json",
+                    linux = $"sudo ./dranzo-agent install --server {url} --token <token> --ca-file ca.pem --trust-file trust.json",
+                    windowsMsi = $"msiexec /i DranzoAgent-<arch>.msi /qn SERVERURL=\"{url}\" ENROLLTOKEN=\"<token>\"",
+                    linuxDeb = $"sudo dpkg -i dranzo-agent_<version>_<arch>.deb && sudo dranzo-agent install --server {url} --token <token> --ca-file ca.pem --trust-file trust.json",
+                    linuxRpm = $"sudo rpm -i dranzo-agent-<version>-1.<x86_64|aarch64>.rpm && sudo dranzo-agent install --server {url} --token <token> --ca-file ca.pem --trust-file trust.json",
+                    check = $"curl -k {url}/agent/v1/healthz   (Windows: curl.exe -k ...; must print {{\"status\":\"ok\"}})",
                 },
             });
         }).RequirePermission(Permissions.EnrollmentManage);

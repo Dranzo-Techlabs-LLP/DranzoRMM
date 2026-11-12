@@ -134,21 +134,26 @@ describe('enrollment tokens', () => {
       caCertificatePem: '',
       trust: { commandKeys: [] },
       commands: {
-        windows: 'msiexec /i DranzoAgent-<arch>.msi /qn SERVERURL="https://agents.example" ENROLLTOKEN="<token>"',
-        macos: 'sudo dranzo-agent install --server https://agents.example --token <token>',
+        windows:
+          'dranzo-agent.exe install --server https://agents.example --token <token> --ca-file ca.pem --trust-file trust.json',
+        macos:
+          'sudo ./dranzo-agent install --server https://agents.example --token <token> --ca-file ca.pem --trust-file trust.json',
+        linux:
+          'sudo ./dranzo-agent install --server https://agents.example --token <token> --ca-file ca.pem --trust-file trust.json',
+        windowsMsi: 'msiexec /i DranzoAgent-<arch>.msi /qn SERVERURL="https://agents.example" ENROLLTOKEN="<token>"',
         linuxDeb: 'sudo dpkg -i dranzo-agent_<version>_<arch>.deb && sudo dranzo-agent install --token <token>',
         linuxRpm: 'sudo rpm -i dranzo-agent-<version>.<arch>.rpm && sudo dranzo-agent install --token <token>',
+        check: 'curl -k https://agents.example/agent/v1/healthz',
       },
     };
     const commands = installCommands(info, 'dz_enroll_SECRET');
-    expect(commands.map((c) => c.label)).toEqual(['Windows', 'macOS', 'Linux (.deb)', 'Linux (.rpm)']);
-    for (const c of commands) {
+    expect(commands.map((c) => c.label)).toEqual(['Windows', 'macOS', 'Linux', 'Connection test']);
+    for (const c of commands.filter((x) => x.id !== 'check')) {
       expect(c.command).toContain('dz_enroll_SECRET');
       expect(c.command).not.toContain('<token>');
+      expect(c.command).toContain('--ca-file ca.pem --trust-file trust.json');
+      expect(c.placeholders).toEqual([]);
     }
-    expect(commands[0]?.placeholders).toEqual(['<arch>']);
-    expect(commands[1]?.placeholders).toEqual([]);
-    expect(commands[2]?.placeholders).toEqual(['<version>', '<arch>']);
   });
 });
 

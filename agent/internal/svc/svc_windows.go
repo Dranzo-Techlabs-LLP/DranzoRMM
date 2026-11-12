@@ -10,7 +10,10 @@ import (
 	"github.com/dranzo/dranzormm/agent/internal/config"
 )
 
-const serviceName = "DranzoRMMAgent"
+// serviceName is a variable only so that the Windows live test
+// (svc_windows_live_test.go) can register a throwaway service under another
+// name; production code never changes it.
+var serviceName = "DranzoRMMAgent"
 
 func serviceOptions() service.KeyValue {
 	return service.KeyValue{

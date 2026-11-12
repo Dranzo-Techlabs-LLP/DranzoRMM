@@ -283,19 +283,27 @@ public static partial class ReleaseEndpoints
         // ----- Installer downloads for whoever enrolls devices -----
         api.MapGet("/agent/installers", async (Ctx c, CancellationToken ct) =>
         {
-            var releases = await c.Db.AgentReleases.AsNoTracking().Include(r => r.Binaries).Where(r => r.Binaries.Any(b => b.Kind != "binary")).ToListAsync(ct);
-            var latest = releases.OrderByDescending(r => r.Version, Comparer<string>.Create(VersionCompare.Compare)).FirstOrDefault();
+            var releases = await c.Db.AgentReleases.AsNoTracking().Include(r => r.Binaries).ToListAsync(ct);
+            var byVersion = Comparer<string>.Create(VersionCompare.Compare);
+            // Newest file for each OS / architecture / kind (installers and the plain program for manual installs).
+            var newest = releases.SelectMany(r => r.Binaries.Select(b => (Release: r, Binary: b)))
+                .GroupBy(x => (x.Binary.Os, x.Binary.Arch, x.Binary.Kind))
+                .Select(g => g.OrderByDescending(x => x.Release.Version, byVersion).First())
+                .OrderBy(x => x.Binary.Os).ThenBy(x => x.Binary.Arch).ThenBy(x => x.Binary.Kind).ToList();
             return Results.Ok(new
             {
-                version = latest?.Version,
-                installers = latest?.Binaries.Where(b => b.Kind != "binary").OrderBy(b => b.Os).ThenBy(b => b.Arch)
-                    .Select(b => new { b.Id, b.Os, b.Arch, b.Kind, b.Sha256, b.SizeBytes, fileName = InstallerFileName(latest.Version, b), url = $"/api/v1/agent/installers/{b.Id}" }) ?? [],
+                version = releases.Select(r => r.Version).OrderByDescending(v => v, byVersion).FirstOrDefault(),
+                installers = newest.Select(x => new
+                {
+                    x.Binary.Id, x.Binary.Os, x.Binary.Arch, x.Binary.Kind, x.Binary.Sha256, x.Binary.SizeBytes, version = x.Release.Version,
+                    fileName = InstallerFileName(x.Release.Version, x.Binary), url = $"/api/v1/agent/installers/{x.Binary.Id}",
+                }),
             });
         }).RequirePermission(Permissions.EnrollmentManage);
 
         api.MapGet("/agent/installers/{id:guid}", async (Guid id, Ctx c, Dranzo.Infrastructure.Storage.IObjectStore store, HttpContext http, CancellationToken ct) =>
         {
-            var binary = await c.Db.AgentReleaseBinaries.AsNoTracking().FirstOrDefaultAsync(b => b.Id == id && b.Kind != "binary", ct);
+            var binary = await c.Db.AgentReleaseBinaries.AsNoTracking().FirstOrDefaultAsync(b => b.Id == id, ct);
             var release = binary is null ? null : await c.Db.AgentReleases.AsNoTracking().FirstOrDefaultAsync(r => r.Id == binary.ReleaseId, ct);
             var blob = binary is null ? null : await c.Db.Blobs.AsNoTracking().FirstOrDefaultAsync(b => b.Id == binary.BlobId, ct);
             if (binary is null || release is null || blob is null)
@@ -355,7 +363,9 @@ public static partial class ReleaseEndpoints
 
     public sealed record UninstallCodeRequest(string? Code);
 
-    private static string InstallerFileName(string version, AgentReleaseBinary b) => $"DranzoAgent-{version}-{b.Os}-{b.Arch}.{b.Kind}";
+    private static string InstallerFileName(string version, AgentReleaseBinary b) => b.Kind == "binary"
+        ? $"dranzo-agent-{version}-{b.Os}-{b.Arch}{(b.Os == "windows" ? ".exe" : "")}"
+        : $"DranzoAgent-{version}-{b.Os}-{b.Arch}.{b.Kind}";
 }
 
 /// <summary>When the agent confirms it removed itself, its certificate is revoked.</summary>

@@ -31,20 +31,39 @@ export interface InstallCommand {
   placeholders: string[];
 }
 
-const LABELS: Record<keyof InstallInfo['commands'], string> = {
+/** Commands shown as tabs. Package-based commands (msi/deb/rpm) are shown only once installers are published. */
+const LABELS: Partial<Record<keyof InstallInfo['commands'], string>> = {
   windows: 'Windows',
   macos: 'macOS',
-  linuxDeb: 'Linux (.deb)',
-  linuxRpm: 'Linux (.rpm)',
+  linux: 'Linux',
+  check: 'Connection test',
 };
 
 /** Per-OS install commands from `GET /agent/install-info` with the one-time token substituted for `<token>`. */
 export function installCommands(info: InstallInfo, token: string): InstallCommand[] {
-  return (Object.keys(LABELS) as (keyof InstallInfo['commands'])[]).map((id) => {
-    const command = info.commands[id].replaceAll('<token>', token);
-    const placeholders = [...new Set(command.match(/<[a-z]+>/g) ?? [])];
-    return { id, label: LABELS[id], command, placeholders };
-  });
+  return (Object.keys(LABELS) as (keyof InstallInfo['commands'])[])
+    .filter((id) => typeof info.commands[id] === 'string')
+    .map((id) => {
+      const command = info.commands[id].replaceAll('<token>', token);
+      const placeholders = [...new Set(command.match(/<[a-z]+>/g) ?? [])];
+      return { id, label: LABELS[id] ?? id, command, placeholders };
+    });
+}
+
+/** Saves a small text file in the browser (the CA certificate and trust file the agent needs). */
+export function downloadText(fileName: string, content: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/octet-stream' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function trustFileContent(info: InstallInfo): string {
+  return JSON.stringify(info.trust);
 }
 
 export const EXPIRY_PRESETS: { hours: number; label: string }[] = [

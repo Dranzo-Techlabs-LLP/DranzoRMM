@@ -16,9 +16,17 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { enrollmentApi, errorMessage, qk, type EnrollmentTokenCreated, type Id, type Organization } from '@/lib/api';
+import {
+  enrollmentApi,
+  errorMessage,
+  qk,
+  type EnrollmentTokenCreated,
+  type Id,
+  type InstallInfo,
+  type Organization,
+} from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
-import { EXPIRY_PRESETS, installCommands } from './tokens';
+import { downloadText, EXPIRY_PRESETS, installCommands, trustFileContent } from './tokens';
 
 const NO_GROUP = '';
 
@@ -320,6 +328,8 @@ function TokenCreated({ created, onDone }: { created: EnrollmentTokenCreated; on
         </p>
       </div>
 
+      {info.data ? <TrustFiles info={info.data} /> : null}
+
       <div className="grid gap-1.5">
         <p className="text-sm font-medium">Install the agent</p>
         {info.isPending ? (
@@ -344,7 +354,9 @@ function TokenCreated({ created, onDone }: { created: EnrollmentTokenCreated; on
                 </pre>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-muted-foreground text-xs">
-                    Run as an administrator on the computer.
+                    {c.id === 'check'
+                      ? 'Run on the computer first: if this fails, the computer cannot reach the server (network or firewall).'
+                      : 'Run as an administrator in the folder holding the agent program, ca.pem and trust.json.'}
                     {c.placeholders.length > 0
                       ? ` Replace ${c.placeholders.join(' and ')} to match the installer file you downloaded.`
                       : ''}
@@ -359,6 +371,32 @@ function TokenCreated({ created, onDone }: { created: EnrollmentTokenCreated; on
       <DialogFooter>
         <Button onClick={onDone}>I have copied it</Button>
       </DialogFooter>
+    </div>
+  );
+}
+
+/** The two public files the agent needs to trust this server. Without them `dranzo-agent install` refuses to run. */
+export function TrustFiles({ info }: { info: InstallInfo }) {
+  return (
+    <div className="grid gap-1.5">
+      <p className="text-sm font-medium">Trust files</p>
+      <p className="text-muted-foreground text-xs">
+        Download both and copy them next to the agent program on the computer. They are public (a certificate and a
+        public key) and let the agent verify this server.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => downloadText('ca.pem', info.caCertificatePem)}>
+          Download ca.pem
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => downloadText('trust.json', trustFileContent(info))}
+        >
+          Download trust.json
+        </Button>
+      </div>
     </div>
   );
 }

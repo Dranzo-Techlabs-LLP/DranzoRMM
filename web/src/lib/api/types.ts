@@ -204,7 +204,15 @@ export interface InstallInfo {
   serverUrl: string;
   caCertificatePem: string;
   trust: { commandKeys: { kid: string; alg: string; publicKey: string }[] };
-  commands: { windows: string; macos: string; linuxDeb: string; linuxRpm: string };
+  commands: {
+    windows: string;
+    macos: string;
+    linux: string;
+    windowsMsi: string;
+    linuxDeb: string;
+    linuxRpm: string;
+    check: string;
+  };
 }
 
 // ----- Devices -----

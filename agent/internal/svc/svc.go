@@ -138,9 +138,14 @@ func Uninstall() error {
 	if err != nil {
 		return err
 	}
-	_ = s.Stop()
 	// A service definition that does not exist (never installed, or owned by
-	// an OS package instead of "dranzo-agent install") is not an error.
+	// an OS package instead of "dranzo-agent install") is not an error. Ask
+	// first: kardianos/service's Windows Uninstall reports a missing service
+	// with a plain fmt error ("service X is not installed"), not ErrNotInstalled.
+	if _, err := s.Status(); errors.Is(err, service.ErrNotInstalled) {
+		return nil
+	}
+	_ = s.Stop()
 	if err := s.Uninstall(); err != nil && !errors.Is(err, service.ErrNotInstalled) && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove service: %w", err)
 	}

@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { enrollmentApi, qk } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { osLabel } from '@/lib/os';
+import { TrustFiles } from './CreateTokenDialog';
 import { installCommands } from './tokens';
 
 /**
@@ -83,6 +84,11 @@ export function InstallersPanel() {
           </div>
         )}
       </QueryView>
+      {info.data ? (
+        <div className="border-t px-4 py-3">
+          <TrustFiles info={info.data} />
+        </div>
+      ) : null}
       {commands.length > 0 ? (
         <div className="border-t px-4 py-3">
           <p className="mb-2 text-sm font-medium">Install commands</p>
