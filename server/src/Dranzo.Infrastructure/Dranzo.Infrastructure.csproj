@@ -18,7 +18,7 @@
          product must not embed (docs/SPEC.md section 3). Do not upgrade without a licence decision. -->
     <PackageReference Include="PDFsharp-MigraDoc" Version="[6.2.4]" />
     <!-- Pinned above the vulnerable transitive 8.0.1 (GHSA-846f-f764-76mx). -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Dranzo.Domain\Dranzo.Domain.csproj" />
