@@ -9,7 +9,7 @@ RUN dotnet restore src/Dranzo.Api/Dranzo.Api.csproj --locked-mode
 COPY src/ src/
 RUN dotnet publish src/Dranzo.Api/Dranzo.Api.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 WORKDIR /app
 COPY --from=build /app .
 # Key store, object storage (file mode) and exported trust anchors live on volumes owned by the non-root app user.
