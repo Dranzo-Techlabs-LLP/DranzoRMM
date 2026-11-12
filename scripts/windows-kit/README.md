@@ -117,7 +117,7 @@ each step: network reach, copy to `C:\Program Files\DranzoRMM`, Windows Security
 removing the binary, the `install` output, enrollment within 60 s, service
 state, the last lines of `agent.log`. Put it in one folder with
 `dranzo-agent-windows-<arch>.exe`, `ca.pem` and `trust.json`, then run in an
-Administrator PowerShell:
+Administrator PowerShell (or double-click `Install-DranzoAgent.cmd`, which asks for elevation and runs it):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Install-DranzoAgent.ps1 -ServerUrl https://<server>:8443
