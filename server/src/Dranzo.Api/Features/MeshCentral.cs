@@ -11,8 +11,11 @@ namespace Dranzo.Api.Features;
 
 /// <summary>
 /// MeshCentral integration for remote desktop. DranzoRMM does consent, indicator, authorization and audit;
-/// MeshCentral carries the screen stream. Not verified against a live MeshCentral server in this repository's
-/// test suite except for the token format round-trip (see docs/RUNBOOK.md).
+/// MeshCentral carries the screen stream.
+/// Verified against a real MeshCentral 1.1.44 container: the login token below signs the named account in, and
+/// the default agent architecture ids (4, 43, 6, 26, 16, 29) all resolve to agent binaries.
+/// Not verified: a full MeshAgent install on a device and an actual desktop stream (needs a MeshCentral device
+/// group and a machine with a desktop session). See docs/RUNBOOK.md.
 /// </summary>
 public sealed class MeshCentral(IOptions<DranzoOptions> options, IHttpClientFactory http, TimeProvider clock)
 {

@@ -57,9 +57,11 @@ Cross-tenant tests (`TenantIsolationTests`) run every endpoint as a user of orga
 ## 4. Identity
 
 - ASP.NET Core Identity (`AddIdentityCore`) for password hashing (PBKDF2), lockout and TOTP. Custom `User` entity; Identity's own roles are not used.
-- Login is two-step: password → TOTP. A user without TOTP is forced through enrolment at first login and gets no session until it is verified. **No MFA exemptions.** Recovery codes are issued once.
+- Login is two-step: password → TOTP. A user without TOTP is forced through enrolment at first login and gets no session until it is verified. **No MFA exemptions.** Ten 80-bit recovery codes are issued once (regenerating them needs step-up).
+- Secrets that must live in the database (TOTP seeds, notification channel settings) and the short-lived login challenge are encrypted with AES-256-GCM by `SecretProtector` under a key that exists only in the key store. A copy of the database alone cannot decrypt them.
 - Session: opaque server-side session row + `HttpOnly`, `Secure`, `SameSite=Strict` cookie. Idle timeout 30 min, absolute 12 h (configurable). CSRF: double-submit header (`X-CSRF-Token`) checked on every unsafe method.
-- **Step-up**: sensitive endpoints carry `RequireStepUp`; the caller must have re-entered a TOTP code within the last 5 minutes (`POST /api/v1/auth/step-up`), otherwise `401` with `stepUpRequired`.
+- **Step-up**: sensitive endpoints carry `RequireStepUp`; the caller must have re-entered a TOTP code within the last 5 minutes (`POST /api/v1/auth/step-up`), otherwise `401` with `{"error": "step_up_required"}`. Wide actions decided at run time (more than 10 devices, a whole organization, scheduled runs on dynamic targets, script policies) apply the same check inside the endpoint.
+- A user with a temporary password (`MustChangePassword`) gets `403 password_change_required` on everything except the account endpoints until the password is changed. Enforced in `AccessMiddleware`, not only in the UI.
 - API keys (Phase 8): `dz_api_<id>_<secret>`, stored hashed, own role assignments, rate limited, cannot perform step-up actions.
 
 ## 5. PKI and signing
@@ -69,6 +71,9 @@ Cross-tenant tests (`TenantIsolationTests`) run every endpoint as a user of orga
 | Device CA | ECDSA P-256 | Issues device client certs and the agent-listener server cert | file keystore (`DRANZO_KEYSTORE_DIR`, outside the repo, 0600) | Key Vault |
 | Command signing key | Ed25519 | Signs `job.dispatch`, `update.available`, sessions | file keystore | Key Vault (see note) |
 | Device key | ECDSA P-256 | mTLS client auth | generated on the device, never leaves it | same |
+| Data encryption key | AES-256-GCM | Encrypts TOTP seeds, channel secrets, login challenge | file keystore | Key Vault secret |
+
+Missing keys are created only when `Dranzo:KeyStore:AllowCreate` allows it (default: yes for the file store, **no** for Key Vault). A wrong or empty production key store stops the server instead of silently minting new keys that would orphan every enrolled agent.
 
 All key use goes through `IKeyStore` / `ICommandSigner` / `ICertificateAuthority`. Certificates are built with `System.Security.Cryptography.X509Certificates.CertificateRequest`; Ed25519 uses BouncyCastle. No hand-written cryptography.
 
@@ -82,7 +87,7 @@ Everything that acts on a device (scripts, software, patches, policies, reboots,
 
 ## 7. Audit log
 
-`AuditEvent` rows are append-only (no update/delete in code; database trigger rejects `UPDATE`/`DELETE`). Each row stores `PrevHash` and `Hash = SHA-256(PrevHash ‖ canonical fields)`, forming one chain per partner. `GET /api/v1/audit/verify` and a nightly hosted service recompute the chain and raise an alert on mismatch.
+`AuditEvent` rows are append-only (no update/delete in code; database trigger rejects `UPDATE`/`DELETE`). Each row stores `PrevHash` and `Hash = SHA-256(PrevHash ‖ canonical fields)`, forming one chain per partner. `GET /api/v1/audit/verify` and the daily `AuditVerifier` hosted service recompute the chain; a mismatch is logged at critical level, written to the audit log and published as the `audit.integrity_failed` webhook event.
 
 ## 8. Live updates
 
@@ -94,9 +99,10 @@ The agent connection registry is in-process. One server instance handles thousan
 
 ## 10. Production topology (Azure)
 
-- `dashboard` Container App: HTTP ingress, managed certificate, serves API + SignalR + static web.
-- `agents` Container App (same image, `DRANZO_ROLE=agents`): **TCP ingress** on 443 so Kestrel terminates TLS itself with the private-CA server certificate and performs mTLS end to end.
-- Azure Database for PostgreSQL Flexible Server, Blob Storage, Key Vault (managed identity), Log Analytics.
-- MeshCentral: separate Container App with its own storage.
+- One Container App runs the server image with **two ingresses**: HTTP ingress (managed certificate) for the dashboard listener, and an additional **TCP port** for the agent listener so Kestrel terminates TLS itself with the private-CA certificate and performs mTLS end to end.
+- **Agent port.** The brief asks for agents on 443. Azure Container Apps does not allow an extra TCP port to reuse 80/443 of the same environment, so the Bicep defaults to **8443** for agents. To give agents 443 use one of: a second environment/app dedicated to the agent gateway, Azure Application Gateway / Front Door in TCP mode in front, or App Service / AKS. This is an open decision (see `docs/PLAN.md`).
+- Splitting dashboard and agent gateway into two apps needs a backplane first (section 9); the Bicep has a `splitAgentGateway` switch for later.
+- Azure Database for PostgreSQL Flexible Server (private access), Blob Storage, Key Vault (managed identity), Log Analytics. MeshCentral: separate Container App with its own storage.
+- Behind the ingress set `Dranzo:TrustForwardedHeaders=true`. Forwarded headers are accepted only from `Dranzo:TrustedProxyNetworks` (default: loopback and private ranges), one hop.
 
-See `/deploy/bicep`. The Bicep has not been deployed from this repository (needs an Azure subscription).
+See `/deploy/bicep`. The Bicep has not been compiled or deployed from this repository (needs the Azure CLI and a subscription).

@@ -91,7 +91,10 @@ class Api:
             if not self.secret:
                 raise SystemExit(f"The administrator already has an authenticator and {state_file} does not hold its seed. "
                                  "Use a fresh stack (docker compose down -v) or point --state at the right file.")
-            _, done = self.call("POST", "/api/v1/auth/mfa/verify", {"challengeToken": challenge, "code": self.code()})
+            status, done = self.call("POST", "/api/v1/auth/mfa/verify", {"challengeToken": challenge, "code": self.code()}, ok=(200, 401))
+            if status == 401:
+                # The current code was already used by an earlier run (the server refuses replays): take the next one.
+                status, done = self.call("POST", "/api/v1/auth/mfa/verify", {"challengeToken": challenge, "code": self.code()})
         self.csrf = done["csrfToken"]
 
     def step_up(self):
@@ -215,6 +218,16 @@ def main():
         _, verify = api.call("GET", "/api/v1/audit/verify")
         assert verify["ok"], f"audit chain broken: {verify}"
         step(f"audit trail complete (script hash recorded) and hash chain verifies over {verify['count']} events")
+
+        # Object storage round trip: upload a (dummy) package, the server must report its SHA-256.
+        blob = os.urandom(4096)
+        req = urllib.request.Request(api.base + "/api/v1/packages/upload?fileName=e2e-dummy.deb", data=blob, method="PUT")
+        req.add_header("X-CSRF-Token", api.csrf)
+        req.add_header("Content-Type", "application/octet-stream")
+        with api.opener.open(req, timeout=60) as resp:
+            uploaded = json.loads(resp.read())
+        assert uploaded["sha256"] == hashlib.sha256(blob).hexdigest() and uploaded["sizeBytes"] == len(blob), "upload hash mismatch"
+        step("package upload stored in object storage with a server-computed SHA-256")
 
         caps = set(detail.get("capabilities") or [])
         if "software.scan" in caps:

@@ -53,3 +53,9 @@ paths = [
   '''(^|/)packages\.lock\.json$''',
   '''(^|/)go\.sum$''',
 ]
+
+# Azurite's fixed development account key. It is published in Microsoft's documentation, is the same on every
+# machine and only works against the local emulator (deploy/docker-compose.yml).
+[[allowlists]]
+description = "Azurite emulator well-known development key"
+regexes = ['''Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==''']
