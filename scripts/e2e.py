@@ -129,6 +129,8 @@ def main():
     ap.add_argument("--env-file", default=str(ROOT / ".env"))
     ap.add_argument("--state", default=str(ROOT / "deploy" / ".e2e-state.json"))
     ap.add_argument("--keep-agent", action="store_true")
+    ap.add_argument("--update-binary", help="agent binary (for the device's OS/arch) to roll out as a signed update")
+    ap.add_argument("--update-version", default="0.9.0")
     args = ap.parse_args()
 
     email = os.environ.get("DRANZO_ADMIN_EMAIL", "admin@example.test")
@@ -244,6 +246,23 @@ def main():
             assert any(e["name"] in ("etc", "usr", "bin", "Users") for e in listing["entries"]), "root listing looks wrong"
             api.call("POST", f"/api/v1/sessions/{s['sessionId']}/end")
             step("remote file session: consent mode applied, directory listed through a signed, session-bound job, session ended")
+
+        if args.update_binary:
+            data = pathlib.Path(args.update_binary).read_bytes()
+            api.step_up()
+            req = urllib.request.Request(api.base + "/api/v1/releases/upload?fileName=dranzo-agent", data=data, method="PUT")
+            req.add_header("X-CSRF-Token", api.csrf)
+            with api.opener.open(req, timeout=300) as resp:
+                blob = json.loads(resp.read())
+            assert blob["sha256"] == hashlib.sha256(data).hexdigest()
+            _, rel = api.call("POST", "/api/v1/releases", {"version": args.update_version, "notes": "e2e",
+                                                           "binaries": [{"os": device["os"], "arch": device["arch"], "blobId": blob["blobId"]}]})
+            api.call("POST", f"/api/v1/releases/{rel['id']}/rollout", {"ring": "all"})
+            wait_for(f"the agent to update itself to {args.update_version}",
+                     lambda: api.call("GET", f"/api/v1/devices/{device['id']}")[1]["agentVersion"] == args.update_version, timeout=300, every=3)
+            wait_for("the agent to confirm the update",
+                     lambda: any(d["state"] == "installed" for d in api.call("GET", f"/api/v1/releases/{rel['id']}/devices")[1]), timeout=120, every=3)
+            step(f"signed self-update: server offered {args.update_version}, agent verified, swapped, reconnected and confirmed 'installed'")
 
         api.step_up()
         api.call("POST", f"/api/v1/devices/{device['id']}/revoke")
