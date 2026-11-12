@@ -26,7 +26,7 @@ export Dranzo__AgentHostnames__0="$IP" Dranzo__AgentHostnames__1=localhost Dranz
 export Dranzo__PublicAgentUrl="https://$IP:8443"
 export Dranzo__KeyStore__Directory="$STATE/keys" Dranzo__Storage__Directory="$STATE/storage"
 # Logs every request, so connection attempts from test machines are visible in server.log.
-(cd src/Dranzo.Api/bin/Debug/net10.0 && exec nohup env "Logging__LogLevel__Microsoft.AspNetCore.Hosting.Diagnostics=Information" dotnet Dranzo.Api.dll > "$STATE/server.log" 2>&1) &
+(cd src/Dranzo.Api/bin/Debug/net10.0 && exec nohup env "Logging__LogLevel__Microsoft.AspNetCore.Hosting.Diagnostics=Information" "Logging__LogLevel__Microsoft.AspNetCore.Server.Kestrel.Connections=Debug" "Logging__LogLevel__Microsoft.AspNetCore.Server.Kestrel.Https=Debug" "Logging__LogLevel__Dranzo.AgentConnections=Debug" dotnet Dranzo.Api.dll > "$STATE/server.log" 2>&1) &
 echo $! > "$STATE/server.pid"
 for _ in $(seq 1 60); do
     curl -fsS "http://localhost:8080/healthz" >/dev/null 2>&1 && break

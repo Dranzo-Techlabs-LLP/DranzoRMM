@@ -154,7 +154,7 @@ public static class DranzoApp
             k.AddServerHeader = false;
             k.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
             k.ListenAnyIP(options.DashboardPort);
-            k.ListenAnyIP(options.AgentPort, listen => listen.UseHttps(https =>
+            k.ListenAnyIP(options.AgentPort, listen => listen.UseAgentConnectionLog().UseHttps(https =>
             {
                 https.SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13;
                 https.ServerCertificateSelector = (_, _) => ca.GetServerCertificate();
@@ -249,5 +249,23 @@ public static class DranzoApp
                 commandKeys = new[] { new { kid = signer.KeyId, alg = "ed25519", publicKey = Convert.ToBase64String(signer.PublicKey) } },
             }));
         }
+    }
+}
+
+internal static class AgentListenerExtensions
+{
+    /// <summary>
+    /// Debug only (category Dranzo.AgentConnections): logs every TCP connection to the agent port with the client
+    /// address, including ones whose TLS handshake fails before any HTTP request is seen.
+    /// </summary>
+    public static Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions UseAgentConnectionLog(this Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen)
+    {
+        listen.Use(next => async connection =>
+        {
+            var log = listen.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger("Dranzo.AgentConnections");
+            log.LogDebug("Agent port connection {ConnectionId} from {Remote}", connection.ConnectionId, connection.RemoteEndPoint);
+            await next(connection);
+        });
+        return listen;
     }
 }
