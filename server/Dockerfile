@@ -1,5 +1,5 @@
 # DranzoRMM server (API + agent gateway). Build context: the server/ directory.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY Directory.Build.props DranzoRMM.sln ./
 COPY src/Dranzo.Domain/Dranzo.Domain.csproj src/Dranzo.Domain/packages.lock.json src/Dranzo.Domain/
