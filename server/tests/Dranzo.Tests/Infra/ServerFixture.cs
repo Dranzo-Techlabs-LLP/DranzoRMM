@@ -1,3 +1,4 @@
+using Dranzo.Api.Features;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -49,6 +50,7 @@ public class ServerFixture : IAsyncLifetime
 
     public WebApplication App { get; private set; } = null!;
     public TestClock Clock { get; } = new();
+    public FakeUniFi UniFi { get; } = new();
     public string DashboardUrl { get; private set; } = "";
     public string AgentUrl { get; private set; } = "";
     public string TempDir => _tempDir;
@@ -96,6 +98,7 @@ public class ServerFixture : IAsyncLifetime
             b.Configuration.Sources.Clear();
             b.Configuration.AddInMemoryCollection(config);
             b.Services.AddSingleton<TimeProvider>(Clock);
+            b.Services.AddSingleton<IUniFiTransport>(UniFi);
             b.Logging.SetMinimumLevel(LogLevel.Warning);
         }, Environments.Development);
         await DranzoApp.InitializeAsync(App);

@@ -22,11 +22,12 @@ public static class AlertTypes
     public const string ComplianceDrift = "compliance.drift";
     public const string KnownExploited = "vulnerability.known_exploited";
     public const string NetworkUnknownDevice = "network.unknown_device";
+    public const string NetworkDeviceOnGuest = "network.device_on_guest";
 
-    public static readonly string[] All = [DeviceOffline, DiskUsage, AntivirusOff, FirewallOff, EncryptionOff, PatchFailed, LocalAdminNew, AgentTamper, ComplianceDrift, KnownExploited, NetworkUnknownDevice];
+    public static readonly string[] All = [DeviceOffline, DiskUsage, AntivirusOff, FirewallOff, EncryptionOff, PatchFailed, LocalAdminNew, AgentTamper, ComplianceDrift, KnownExploited, NetworkUnknownDevice, NetworkDeviceOnGuest];
 
     /// <summary>Default rule types added after the first release; Bootstrap adds them to partners that have none.</summary>
-    public static readonly string[] AddedLater = [NetworkUnknownDevice];
+    public static readonly string[] AddedLater = [NetworkUnknownDevice, NetworkDeviceOnGuest];
     public static readonly string[] Severities = ["info", "warning", "critical"];
 
     /// <summary>Rules created for a new partner so alerting works out of the box.</summary>
@@ -43,6 +44,7 @@ public static class AlertTypes
         Rule("Compliance drift", ComplianceDrift, "warning", "{}"),
         Rule("Known exploited vulnerability present", KnownExploited, "critical", "{}"),
         Rule("Unknown device on the network", NetworkUnknownDevice, "warning", "{}"),
+        Rule("Company device on guest Wi-Fi", NetworkDeviceOnGuest, "warning", "{}"),
     ];
 
     private static AlertRule Rule(string name, string type, string severity, string json) =>

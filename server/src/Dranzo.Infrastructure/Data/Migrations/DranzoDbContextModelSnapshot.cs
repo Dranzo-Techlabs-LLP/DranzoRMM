@@ -1194,6 +1194,68 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.ToTable("JobRuns");
                 });
 
+            modelBuilder.Entity("Dranzo.Domain.NetworkController", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthMode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CertificateSha256")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SecretProtected")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("UnifiOs")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UnifiSite")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Username")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NetworkControllers");
+                });
+
             modelBuilder.Entity("Dranzo.Domain.NetworkDevice", b =>
                 {
                     b.Property<Guid>("Id")

@@ -7,7 +7,14 @@ import { describeScope } from '@/features/admin/scope';
 import { formatAuditDetail, resultTone } from '@/features/audit/detail';
 import { readDeviceFilters, toApiFilter, writeDeviceFilters } from '@/features/devices/filters';
 import { installCommands, tokenState } from '@/features/enrollment/tokens';
-import { deviceKind, displayName } from '@/features/network/model';
+import {
+  controllerProblem,
+  deviceKind,
+  displayName,
+  wifiProblem,
+  type ControllerForm,
+  type WifiForm,
+} from '@/features/network/model';
 import { timeZoneOptions } from '@/features/organizations/timezones';
 import { matchesPostureFilter, scoreTone } from '@/features/security/posture-model';
 import { countDevices, summarizeByOrganization } from '@/features/overview/fleet';
@@ -346,5 +353,49 @@ describe('network devices', () => {
       visibleNav(accessFor({ permissions: perms, partnerWide: false })).flatMap((a) => a.pages.map((p) => p.label));
     expect(labels(['network.read'])).toContain('Network devices');
     expect(labels(['devices.read'])).not.toContain('Network devices');
+  });
+});
+
+describe('network controller forms', () => {
+  const ok: ControllerForm = {
+    organizationId: 'o',
+    siteId: '',
+    name: 'Office UDM',
+    baseUrl: 'https://192.168.1.1',
+    unifiSite: 'default',
+    unifiOs: true,
+    authMode: 'apikey',
+    username: '',
+    secret: 'key',
+    certificateSha256: '',
+  };
+
+  it('accepts a valid controller and refuses unsafe addresses', () => {
+    expect(controllerProblem(ok, true)).toBeNull();
+    expect(controllerProblem({ ...ok, secret: '' }, false)).toBeNull();
+    expect(controllerProblem({ ...ok, secret: '' }, true)).toMatch(/API key/);
+    expect(controllerProblem({ ...ok, baseUrl: 'http://192.168.1.1' }, true)).toMatch(/https/);
+    expect(controllerProblem({ ...ok, baseUrl: 'https://192.168.1.1/manage' }, true)).toMatch(/without a path/);
+    expect(controllerProblem({ ...ok, baseUrl: 'https://169.254.169.254' }, true)).toMatch(/link-local/);
+    expect(controllerProblem({ ...ok, authMode: 'password' }, true)).toMatch(/account/);
+    expect(controllerProblem({ ...ok, certificateSha256: 'abc' }, true)).toMatch(/fingerprint/);
+  });
+
+  it('validates the Wi-Fi setup', () => {
+    const w: WifiForm = {
+      enabled: true,
+      ssid: 'Office',
+      passphrase: 'long-enough',
+      vlan: '10',
+      subnet: '192.168.10.1/24',
+      clientIsolation: true,
+    };
+    expect(wifiProblem('Office', w, true)).toBeNull();
+    expect(wifiProblem('Guest', { ...w, passphrase: '' }, false)).toBeNull();
+    expect(wifiProblem('Office', { ...w, passphrase: '' }, true)).toMatch(/password/);
+    expect(wifiProblem('Office', { ...w, vlan: '1' }, true)).toMatch(/VLAN/);
+    expect(wifiProblem('Office', { ...w, subnet: '8.8.8.1/24' }, true)).toMatch(/gateway/);
+    expect(wifiProblem('Office', { ...w, subnet: '192.168.10.0/24' }, true)).toMatch(/gateway/);
+    expect(wifiProblem('Office', { ...w, enabled: false, ssid: '' }, true)).toBeNull();
   });
 });

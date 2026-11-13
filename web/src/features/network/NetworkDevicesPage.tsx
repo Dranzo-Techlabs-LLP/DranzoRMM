@@ -106,8 +106,8 @@ export default function NetworkDevicesPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: networkKeys.all });
   const setOne = useMutation({
     mutationFn: ({ d, to }: { d: NetworkDevice; to: NetworkDeviceStatus }) => networkApi.setStatus(d.id, to),
-    onSuccess: async (_r, { d, to }) => {
-      notifySuccess(`${displayName(d)}: ${STATUS_LABEL[to].toLowerCase()}.`);
+    onSuccess: async (r, { d, to }) => {
+      notifySuccess(`${displayName(d)}: ${STATUS_LABEL[to].toLowerCase()} (${r.controller}).`);
       await invalidate();
     },
     onError: notifyError,
@@ -115,7 +115,7 @@ export default function NetworkDevicesPage() {
   const setMany = useMutation({
     mutationFn: (to: NetworkDeviceStatus) => networkApi.setStatusBulk([...selected], to),
     onSuccess: async (r, to) => {
-      notifySuccess(`${String(r.updated)} devices ${STATUS_LABEL[to].toLowerCase()}.`);
+      notifySuccess(`${String(r.updated)} devices ${STATUS_LABEL[to].toLowerCase()} (${r.controller}).`);
       setSelected(new Set());
       await invalidate();
     },

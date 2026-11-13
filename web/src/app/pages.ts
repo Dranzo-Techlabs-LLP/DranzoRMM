@@ -17,6 +17,7 @@ import {
   TerminalSquare,
   UserCheck,
   Users,
+  Wifi,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -195,6 +196,14 @@ export const NAV_AREAS: NavArea[] = [
         icon: Network,
         permission: P.networkRead,
         load: () => import('@/features/network/NetworkDevicesPage'),
+      },
+      {
+        id: 'network-controllers',
+        path: 'network/controllers',
+        label: 'Wi-Fi & controllers',
+        icon: Wifi,
+        permission: P.networkRead,
+        load: () => import('@/features/network/NetworkControllersPage'),
       },
     ],
   },

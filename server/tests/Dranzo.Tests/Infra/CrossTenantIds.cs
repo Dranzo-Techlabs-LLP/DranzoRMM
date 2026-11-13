@@ -109,5 +109,10 @@ public static partial class CrossTenantSeedExtensions
         // Phase 10: partner-level access review.
         ids.Map("access-review", Guid.NewGuid(), leakMarker: false);
         ids.Map("network", Guid.NewGuid(), leakMarker: false);
+        // A network controller of organization B.
+        await admin.StepUpAsync();
+        fx.UniFi.Add("xb-unifi.example.test");
+        var controller = await admin.PostJsonAsync("/api/v1/network-controllers", new { organizationId = b.OrgId, name = "xb-secret controller", baseUrl = "https://xb-unifi.example.test", authMode = "apikey", secret = FakeUniFi.ApiKey });
+        ids.Map("network-controllers", controller.GetProperty("id").GetGuid());
     }
 }

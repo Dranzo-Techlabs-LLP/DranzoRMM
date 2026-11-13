@@ -40,6 +40,7 @@ public class DranzoDbContext(DbContextOptions<DranzoDbContext> options, TenantCo
     public DbSet<PostureSnapshot> PostureSnapshots => Set<PostureSnapshot>();
     public DbSet<CveEntry> CveEntries => Set<CveEntry>();
     public DbSet<NetworkDevice> NetworkDevices => Set<NetworkDevice>();
+    public DbSet<NetworkController> NetworkControllers => Set<NetworkController>();
     public DbSet<FeedState> FeedStates => Set<FeedState>();
     public DbSet<DeviceVulnerability> DeviceVulnerabilities => Set<DeviceVulnerability>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();

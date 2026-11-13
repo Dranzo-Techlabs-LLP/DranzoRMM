@@ -251,7 +251,7 @@ public class NetworkTests(ServerFixture fx)
 
         // Approve and block, audited.
         var printer = (await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}&search=printer")).GetProperty("items")[0].GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/v1/network/devices/{printer}/status", new { status = "approved", note = "Office printer" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync($"/api/v1/network/devices/{printer}/status", new { status = "approved", note = "Office printer" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsync($"/api/v1/network/devices/{printer}/status", new { status = "trusted" })).StatusCode);
         var all = (await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}&status=unknown")).GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToArray();
         var bulk = await admin.PostJsonAsync("/api/v1/network/devices/status", new { ids = all, status = "blocked" });
@@ -396,5 +396,124 @@ public class NetworkTests(ServerFixture fx)
     {
         await client.StepUpAsync();
         return await call();
+    }
+
+    // ----- 10f: UniFi controller, guest and office Wi-Fi -----
+
+    [Fact]
+    public void Controller_address_and_subnet_rules()
+    {
+        Assert.Equal("https://unifi.office.lan", UniFiRules.NormalizeBaseUrl("https://unifi.office.lan/"));
+        Assert.Equal("https://192.168.1.1:8443", UniFiRules.NormalizeBaseUrl("https://192.168.1.1:8443"));
+        Assert.Null(UniFiRules.NormalizeBaseUrl("http://192.168.1.1"));
+        Assert.Null(UniFiRules.NormalizeBaseUrl("https://user:pw@192.168.1.1"));
+        Assert.Null(UniFiRules.NormalizeBaseUrl("https://192.168.1.1/manage"));
+        Assert.Null(UniFiRules.NormalizeBaseUrl("https://127.0.0.1"));
+        Assert.Null(UniFiRules.NormalizeBaseUrl("https://169.254.169.254"));
+        Assert.Null(UniFiRules.NormalizeBaseUrl("https://localhost"));
+        Assert.False(UniFiRules.AllowedTarget(System.Net.IPAddress.Parse("::1")));
+        Assert.True(UniFiRules.AllowedTarget(System.Net.IPAddress.Parse("10.0.0.1")));
+        Assert.Equal(("192.168.20.1/24", "192.168.20.10", "192.168.20.254"), NetworkControllerEndpoints.ParseSubnet("192.168.20.1/24"));
+        Assert.Null(NetworkControllerEndpoints.ParseSubnet("8.8.8.1/24"));
+        Assert.Null(NetworkControllerEndpoints.ParseSubnet("192.168.20.0/24"));
+        Assert.Null(NetworkControllerEndpoints.ParseSubnet("192.168.20.1/8"));
+    }
+
+    [Fact]
+    public async Task Unifi_controller_setup_wifi_sync_guest_alert_and_blocking()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Uni " + U);
+        var host = $"unifi-{U}.example.test";
+        var unifi = fx.UniFi.Add(host);
+        unifi.Devices.Add(new() { ["mac"] = "f0:9f:c2:00:00:01", ["name"] = "Lobby AP", ["model"] = "U6-Pro", ["type"] = "uap", ["ip"] = "192.168.1.20", ["state"] = 1, ["version"] = "6.6.77", ["num_sta"] = 3 });
+
+        // Configuring a controller is partner-wide and needs a fresh code; the secret never comes back.
+        var netAdmin = await fx.CreateUserAsync($"uniorg-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, org.OrgId);
+        await netAdmin.StepUpAsync();
+        Assert.Equal(HttpStatusCode.Forbidden, (await netAdmin.PostAsync("/api/v1/network-controllers", new { organizationId = org.OrgId, name = "x", baseUrl = $"https://{host}", secret = "k" })).StatusCode);
+        await admin.StepUpAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsync("/api/v1/network-controllers", new { organizationId = org.OrgId, name = "x", baseUrl = "https://169.254.169.254", secret = "k" })).StatusCode);
+        var created = await admin.PostAsync("/api/v1/network-controllers", new { organizationId = org.OrgId, siteId = org.SiteId, name = "Office UDM", baseUrl = $"https://{host}", authMode = "apikey", secret = FakeUniFi.ApiKey });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var createdText = await created.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(FakeUniFi.ApiKey, createdText, StringComparison.Ordinal);
+        var controllerId = JsonDocument.Parse(createdText).RootElement.GetProperty("id").GetGuid();
+
+        // The org's Network Admin can see it and its devices.
+        var overview = await netAdmin.GetJsonAsync($"/api/v1/network-controllers/{controllerId}/overview");
+        Assert.True(overview.GetProperty("reachable").GetBoolean());
+        Assert.Equal("Lobby AP", overview.GetProperty("devices")[0].GetProperty("name").GetString());
+        Assert.Equal("online", overview.GetProperty("devices")[0].GetProperty("state").GetString());
+
+        // Separate office and guest Wi-Fi.
+        await admin.StepUpAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsync($"/api/v1/network-controllers/{controllerId}/wifi-setup",
+            new { office = new { ssid = "Dranzo", passphrase = "short", vlan = 10, subnet = "192.168.10.1/24" } })).StatusCode);
+        var setup = await admin.PostJsonAsync($"/api/v1/network-controllers/{controllerId}/wifi-setup", new
+        {
+            office = new { ssid = "Dranzo-Office", passphrase = "office-secret-123", vlan = 10, subnet = "192.168.10.1/24" },
+            guest = new { ssid = "Dranzo-Guest", passphrase = "guest-pass-456", vlan = 20, subnet = "192.168.20.1/24", clientIsolation = true },
+        });
+        Assert.Equal(4, setup.GetProperty("steps").GetArrayLength());
+        var guestNet = unifi.Networks.Single(n => n["vlan"]!.GetValue<int>() == 20);
+        Assert.Equal("guest", guestNet["purpose"]!.GetValue<string>());
+        Assert.Equal("192.168.20.10", guestNet["dhcpd_start"]!.GetValue<string>());
+        var guestWlan = unifi.Wlans.Single(w => w["name"]!.GetValue<string>() == "Dranzo-Guest");
+        Assert.True(guestWlan["is_guest"]!.GetValue<bool>());
+        Assert.True(guestWlan["l2_isolation"]!.GetValue<bool>());
+        Assert.Equal(guestNet["_id"]!.GetValue<string>(), guestWlan["networkconf_id"]!.GetValue<string>());
+        Assert.Equal("apg-all", guestWlan["ap_group_ids"]![0]!.GetValue<string>());
+        var officeWlan = unifi.Wlans.Single(w => w["name"]!.GetValue<string>() == "Dranzo-Office");
+        Assert.False(officeWlan["is_guest"]!.GetValue<bool>());
+        Assert.Equal("wpapsk", officeWlan["security"]!.GetValue<string>());
+        // Running it again changes nothing.
+        await admin.StepUpAsync();
+        var again = await admin.PostJsonAsync($"/api/v1/network-controllers/{controllerId}/wifi-setup", new
+        {
+            office = new { ssid = "Dranzo-Office", passphrase = "office-secret-123", vlan = 10, subnet = "192.168.10.1/24" },
+        });
+        Assert.All(again.GetProperty("steps").EnumerateArray(), st => Assert.Contains("already exists", st.GetString(), StringComparison.Ordinal));
+        Assert.Equal(2, unifi.Wlans.Count);
+        // Passwords never reach the audit log.
+        var audit = await admin.GetJsonAsync($"/api/v1/audit?organizationId={org.OrgId}&action=network_controller.wifi_setup");
+        Assert.DoesNotContain("office-secret-123", audit.GetRawText(), StringComparison.Ordinal);
+        var allAudit = await admin.GetJsonAsync($"/api/v1/audit?organizationId={org.OrgId}&pageSize=200");
+        Assert.DoesNotContain(FakeUniFi.ApiKey, allAudit.GetRawText(), StringComparison.Ordinal);
+
+        // Sync: a company laptop on the guest Wi-Fi raises an alert; clients become discovered devices.
+        await using var laptop = await TestAgent.EnrollAsync(fx, org.Token, "uni-laptop", os: "windows");
+        await laptop.SendAsync("inventory", new
+        {
+            collectedAt = DateTimeOffset.UtcNow, hostname = "uni-laptop", os = new { family = "windows", name = "Windows 11", version = "", build = "", kernel = "" },
+            arch = "amd64", network = new[] { new { name = "Wi-Fi", mac = "04:d9:f5:0a:0b:0c", ipv4 = new[] { "192.168.20.33" }, ipv6 = Array.Empty<string>() } },
+        });
+        await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{laptop.DeviceId}"), d => d.GetProperty("osName").GetString() == "Windows 11");
+        unifi.Clients.Add(new() { ["mac"] = "04:d9:f5:0a:0b:0c", ["ip"] = "192.168.20.33", ["hostname"] = "uni-laptop", ["essid"] = "Dranzo-Guest", ["is_guest"] = true });
+        unifi.Clients.Add(new() { ["mac"] = "aa:bb:cc:00:00:07", ["ip"] = "192.168.20.40", ["hostname"] = "visitor-phone", ["essid"] = "Dranzo-Guest", ["is_guest"] = true, ["oui"] = "Apple" });
+        var synced = await admin.PostJsonAsync($"/api/v1/network-controllers/{controllerId}/sync", new { });
+        Assert.Equal(JsonValueKind.Null, synced.GetProperty("lastError").ValueKind);
+        var alerts = await admin.GetJsonAsync($"/api/v1/alerts?deviceId={laptop.DeviceId}");
+        Assert.Contains(alerts.GetProperty("items").EnumerateArray(), a => a.GetProperty("type").GetString() == "network.device_on_guest");
+        Assert.Equal("Dranzo-Guest", (await admin.GetJsonAsync($"/api/v1/devices/{laptop.DeviceId}")).GetProperty("wifiSsid").GetString());
+        var phone = (await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}&search=visitor")).GetProperty("items")[0];
+        Assert.Equal("Apple", phone.GetProperty("vendor").GetString());
+
+        // Blocking a discovered device blocks it on the Wi-Fi.
+        var block = await admin.PostJsonAsync($"/api/v1/network/devices/{phone.GetProperty("id").GetGuid()}/status", new { status = "blocked" });
+        Assert.Contains("applied on the controller", block.GetProperty("controller").GetString(), StringComparison.Ordinal);
+        Assert.Contains(unifi.Commands, cmd => cmd["cmd"]!.GetValue<string>() == "block-sta" && cmd["mac"]!.GetValue<string>() == "aa:bb:cc:00:00:07");
+
+        // A wrong key is reported, not thrown.
+        await admin.StepUpAsync();
+        await admin.PatchAsync($"/api/v1/network-controllers/{controllerId}", new { secret = "wrong" });
+        var failed = await admin.PostJsonAsync($"/api/v1/network-controllers/{controllerId}/sync", new { });
+        Assert.Contains("refused the credentials", failed.GetProperty("lastError").GetString(), StringComparison.Ordinal);
+
+        // Another organization's Network Admin sees nothing.
+        var other = await fx.SeedOrgAsync("Uni other " + U);
+        var outsider = await fx.CreateUserAsync($"uniout-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, other.OrgId);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/api/v1/network-controllers/{controllerId}/overview")).StatusCode);
+        Assert.Empty((await outsider.GetJsonAsync("/api/v1/network-controllers")).EnumerateArray());
     }
 }

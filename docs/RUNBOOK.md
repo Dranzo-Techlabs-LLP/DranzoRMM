@@ -482,3 +482,13 @@ PPPC profile; Screen Recording can only be made approvable by a standard user, n
 - **What the agent changes:** Windows Firewall groups `DranzoRMM` (policy rules) and `DranzoRMM Isolation`; nftables tables `inet dranzormm` and `inet dranzormm_isolation`; macOS pf anchors `com.apple/250.DranzoRMM` and `com.apple/200.DranzoRMMIsolation` (pf is switched on if it was off). Nothing else. Uninstalling the agent removes all of them.
 - **Linux without nftables:** firewall rules and isolation report "not supported"; install the `nftables` package.
 
+### 12.1 Connecting a UniFi controller
+
+1. In UniFi Network (on the console): Settings → Control Plane → Integrations → create an API key. Or create a local admin account for DranzoRMM with the least role that can edit Wi-Fi.
+2. DranzoRMM: Network → Wi-Fi & controllers → Add controller (partner admin, authenticator code). Address `https://<console-ip>` (UniFi OS) or `https://<host>:8443` (classic controller, untick "UniFi OS"). If the console uses its self-signed certificate, add its SHA-256 fingerprint: `openssl s_client -connect <ip>:443 </dev/null | openssl x509 -noout -fingerprint -sha256`.
+3. Choose the Dranzo site whose discovered devices are linked to the controller's clients, then **Sync now**. Errors appear on the card.
+4. **Guest & office Wi-Fi** creates both networks on their own VLANs and subnets; the guest network uses UniFi guest policies (internet only) and client isolation. Existing VLANs/SSIDs are reused, never changed.
+5. Blocking a device on Network → Network devices then blocks it on the Wi-Fi (`block-sta`); approving unblocks it.
+
+The integration uses UniFi Network's classic API (`/proxy/network/api/s/<site>/…`), written against UniFi Network 8/9 and tested against a simulated controller only. Check it on your console before relying on it.
+

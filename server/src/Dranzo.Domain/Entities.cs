@@ -227,6 +227,33 @@ public class NetworkDevice : IOrgOwned
     public string? StatusChangedBy { get; set; }
 }
 
+/// <summary>A network controller (UniFi) that manages an organization's Wi-Fi, switches and gateway.</summary>
+public class NetworkController : IOrgOwned
+{
+    public Guid Id { get; set; }
+    public Guid PartnerId { get; set; }
+    public Guid OrganizationId { get; set; }
+    /// <summary>Discovered network devices of this Dranzo site are linked to the controller's clients.</summary>
+    public Guid? SiteId { get; set; }
+    public required string Name { get; set; }
+    public string Kind { get; set; } = "unifi";
+    /// <summary>https://host[:port], no path.</summary>
+    public required string BaseUrl { get; set; }
+    /// <summary>UniFi site name ("default" for most installations).</summary>
+    public string UnifiSite { get; set; } = "default";
+    /// <summary>UniFi OS console (UDM, Cloud Key Gen2+, UniFi OS Server): API under /proxy/network.</summary>
+    public bool UnifiOs { get; set; } = true;
+    /// <summary>apikey or password.</summary>
+    public string AuthMode { get; set; } = "apikey";
+    public string? Username { get; set; }
+    /// <summary>API key or password, encrypted with SecretProtector (purpose "network-controller").</summary>
+    public string SecretProtected { get; set; } = "";
+    public string? CertificateSha256 { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? LastSyncAt { get; set; }
+    public string? LastError { get; set; }
+}
+
 public class InventorySnapshot : IDeviceOwned
 {
     public Guid Id { get; set; }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Dranzo.Api.Agents;
 using Dranzo.Api.Features;
 using Dranzo.Api.Jobs;
@@ -52,6 +53,9 @@ public static class FeatureRegistration
         // Phase 10: network and firewall
         services.AddScoped<IJobResultHandler, NetworkScanResultHandler>();
         services.AddScoped<IJobResultHandler, IsolationResultHandler>();
+        services.TryAddSingleton<IUniFiTransport, UniFiTransport>();
+        services.AddSingleton<UniFiFactory>();
+        services.AddScoped<NetworkEnforcer>();
     }
 
     /// <summary>The dispatcher is required for jobs to flow at all; periodic monitors can be switched off in tests.</summary>
@@ -74,6 +78,7 @@ public static class FeatureRegistration
         services.AddHostedService<VulnerabilityFeedService>();
         services.AddHostedService<PolicyEvaluator>();
         services.AddHostedService<UpdateRolloutService>();
+        services.AddHostedService<NetworkControllerSync>();
         services.AddHostedService<Services.AuditVerifier>();
     }
 
@@ -94,5 +99,6 @@ public static class FeatureRegistration
         AccessReviewEndpoints.Map(api);
         NetworkEndpoints.Map(api);
         IsolationEndpoints.Map(api);
+        NetworkControllerEndpoints.Map(api);
     }
 }

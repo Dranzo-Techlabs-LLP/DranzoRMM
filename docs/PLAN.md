@@ -103,7 +103,7 @@ Requested after the first LAN tests: individual system security and firewall, se
 - [x] 10c Network discovery (`network.scan`: neighbor table after a TCP wake-up sweep of the device's private /22-or-smaller subnets; live-tested on macOS, Windows/Linux fixture-tested) and device approval list (approve, block, forget, bulk; audited); managed devices matched by inventory MAC; inventory reports default gateway and Wi-Fi (SSID best effort); alert `network.unknown_device` (one summary on a site's first scan). Vendor names (IEEE OUI) not yet
 - [x] 10d Firewall rule policies (`firewall.rules` check): rule editor, server + agent validation, Windows Firewall group / nftables table / pf anchor owned by DranzoRMM, reachability check with rollback, removal on uninstall. Live-tested: nftables in a Linux container. Windows and macOS pf: fixture-tested only (macOS needs root)
 - [x] 10e Device isolation (`network.isolate` / `network.release`, `devices.isolate` + step-up, reason audited): only DranzoRMM, MeshCentral, DNS and DHCP stay reachable; reachability check with automatic release; state re-applied at agent start; on-screen notice; local `dranzo-agent release-isolation`; released on uninstall. Live-tested: nftables in a Linux container (allowed host reachable, others blocked, release restores). Windows Firewall and macOS pf: fixture-tested only
-- [ ] 10f UniFi integration: guest and office Wi-Fi, network devices, client blocking
+- [~] 10f UniFi integration: controllers (API key or local account, encrypted, optional certificate pin, connect-only-to-that-host client), overview of APs/switches/gateways with restart, separate office/guest Wi-Fi setup (VLAN, subnet, guest policies, client isolation), 5-minute client sync into discovered devices, `network.device_on_guest` alert, block/unblock on approval-list changes. **Tested against a simulated controller only; needs a real UniFi console**
 - [ ] 10g 802.1X / RADIUS (EAP-TLS) with a per-organization network CA
 
 ## Security review
@@ -119,4 +119,5 @@ An independent review of the server found 8 confirmed issues (2 High, 4 Medium, 
 - **Azure:** `az bicep build` / what-if and a real deployment (Bicep never compiled).
 - **MeshCentral:** a real MeshAgent install and desktop session.
 - **Email:** an SMTP server for email notifications.
+- **UniFi:** a console and an API key to verify the integration (Phase 10f/10g).
 - **Live feeds:** set `Dranzo:Feeds:Enabled=true` (and ideally an NVD API key) to download NVD/KEV.

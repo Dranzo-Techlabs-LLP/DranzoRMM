@@ -231,7 +231,7 @@ public static class NetworkEndpoints
             return Results.Created($"/api/v1/jobs/{created.Job.Id}", new { jobId = created.Job.Id, deviceId = device.Id, hostname = device.Hostname });
         }).RequirePermission(Permissions.NetworkManage);
 
-        api.MapPost("/network/devices/{id:guid}/status", async (Guid id, StatusRequest req, Ctx c, CancellationToken ct) =>
+        api.MapPost("/network/devices/{id:guid}/status", async (Guid id, StatusRequest req, Ctx c, NetworkEnforcer enforcer, CancellationToken ct) =>
         {
             var row = await c.Db.NetworkDevices.FirstOrDefaultAsync(n => n.Id == id, ct);
             if (row is null)
@@ -252,12 +252,13 @@ public static class NetworkEndpoints
             row.StatusChangedAt = c.Now;
             row.StatusChangedBy = c.Who.Name;
             await c.Db.SaveChangesAsync(ct);
+            var controller = from == status ? "unchanged" : await enforcer.ApplyAsync([row], ct);
             await c.Audit("network_device.status", organizationId: row.OrganizationId, targetType: "network_device", targetId: row.Id,
-                detail: new { row.Mac, row.Ip, from = from.ToString(), to = status.ToString() }, ct: ct);
-            return Results.NoContent();
+                detail: new { row.Mac, row.Ip, from = from.ToString(), to = status.ToString(), controller }, ct: ct);
+            return Results.Ok(new { controller });
         }).RequirePermission(Permissions.NetworkManage);
 
-        api.MapPost("/network/devices/status", async (BulkStatusRequest req, Ctx c, CancellationToken ct) =>
+        api.MapPost("/network/devices/status", async (BulkStatusRequest req, Ctx c, NetworkEnforcer enforcer, CancellationToken ct) =>
         {
             var ids = (req.Ids ?? []).Distinct().ToList();
             if (ids.Count is 0 or > 500)
@@ -281,12 +282,13 @@ public static class NetworkEndpoints
                 row.StatusChangedBy = c.Who.Name;
             }
             await c.Db.SaveChangesAsync(ct);
+            var controller = await enforcer.ApplyAsync(rows, ct);
             foreach (var org in rows.GroupBy(r => r.OrganizationId))
             {
                 await c.Audit("network_device.status", organizationId: org.Key, targetType: "network_device",
-                    detail: new { count = org.Count(), macs = org.Select(r => r.Mac).Take(100), to = status.ToString() }, ct: ct);
+                    detail: new { count = org.Count(), macs = org.Select(r => r.Mac).Take(100), to = status.ToString(), controller }, ct: ct);
             }
-            return Results.Ok(new { updated = rows.Count });
+            return Results.Ok(new { updated = rows.Count, controller });
         }).RequirePermission(Permissions.NetworkManage);
 
         api.MapDelete("/network/devices/{id:guid}", async (Guid id, Ctx c, CancellationToken ct) =>
