@@ -30,7 +30,7 @@ export function FirewallRulesEditor({
       {rules.map((r, i) => {
         const id = `fw-rule-${String(i)}`;
         return (
-          <div key={id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-6">
+          <div key={id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-3">
             <div className="grid gap-1 text-xs sm:col-span-2">
               <Label htmlFor={`${id}-name`}>Name</Label>
               <Input
@@ -96,7 +96,7 @@ export function FirewallRulesEditor({
                 <Trash2 aria-hidden="true" />
               </Button>
             </div>
-            <div className="grid gap-1 text-xs sm:col-span-2">
+            <div className="grid gap-1 text-xs">
               <Label htmlFor={`${id}-ports`}>{r.direction === 'in' ? 'Local ports' : 'Remote ports'}</Label>
               <Input
                 id={`${id}-ports`}
@@ -109,7 +109,7 @@ export function FirewallRulesEditor({
                 }}
               />
             </div>
-            <div className="grid gap-1 text-xs sm:col-span-2">
+            <div className="grid gap-1 text-xs">
               <Label htmlFor={`${id}-addresses`}>{r.direction === 'in' ? 'From addresses' : 'To addresses'}</Label>
               <Input
                 id={`${id}-addresses`}
@@ -121,7 +121,7 @@ export function FirewallRulesEditor({
                 }}
               />
             </div>
-            <div className="grid gap-1 text-xs sm:col-span-2">
+            <div className="grid gap-1 text-xs">
               <Label htmlFor={`${id}-program`}>Program (Windows, optional)</Label>
               <Input
                 id={`${id}-program`}
