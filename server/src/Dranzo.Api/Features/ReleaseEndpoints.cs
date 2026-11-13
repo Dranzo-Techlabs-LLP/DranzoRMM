@@ -381,6 +381,7 @@ public sealed class AgentUninstallResultHandler(DranzoDbContext db, AgentRegistr
         }
         await db.Devices.Where(d => d.Id == device.Id).ExecuteUpdateAsync(s => s.SetProperty(d => d.Status, DeviceStatus.Revoked)
             .SetProperty(d => d.CertThumbprint, (string?)null).SetProperty(d => d.PrevCertThumbprint, (string?)null).SetProperty(d => d.IsOnline, false), ct);
+        await RadiusEndpoints.RevokeDeviceCertificatesAsync(db, device.PartnerId, device.Id, DateTimeOffset.UtcNow, ct);
         agents.Disconnect(device.Id, "agent uninstalled");
         await audit.WriteAsync(device.PartnerId, new AuditEntry("device.revoke", OrganizationId: device.OrganizationId, DeviceId: device.Id, TargetType: "device", TargetId: device.Id.ToString(),
             Detail: new { device.Hostname, reason = "agent uninstalled", jobRunId = run.Id }, ActorType: "user", ActorId: run.Job.RequestedByUserId, ActorName: run.Job.RequestedByName), ct);

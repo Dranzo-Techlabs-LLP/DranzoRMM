@@ -56,6 +56,8 @@ public static class FeatureRegistration
         services.TryAddSingleton<IUniFiTransport, UniFiTransport>();
         services.AddSingleton<UniFiFactory>();
         services.AddScoped<NetworkEnforcer>();
+        services.AddSingleton<Dranzo.Infrastructure.Security.NetworkCertificateAuthority>();
+        services.AddScoped<IJobResultHandler, CertRequestResultHandler>();
     }
 
     /// <summary>The dispatcher is required for jobs to flow at all; periodic monitors can be switched off in tests.</summary>
@@ -100,5 +102,6 @@ public static class FeatureRegistration
         NetworkEndpoints.Map(api);
         IsolationEndpoints.Map(api);
         NetworkControllerEndpoints.Map(api);
+        RadiusEndpoints.Map(api);
     }
 }

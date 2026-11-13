@@ -26,6 +26,9 @@ const (
 	KindNetworkScan       = "network.scan"
 	KindNetworkIsolate    = "network.isolate"
 	KindNetworkRelease    = "network.release"
+	KindNetworkCertReq    = "network.cert.request"
+	KindWifiInstall       = "network.wifi.install"
+	KindWifiRemove        = "network.wifi.remove"
 )
 
 // Job limits (sections 3 and 6.1).
@@ -302,4 +305,26 @@ type NetworkIsolateResult struct {
 // NetworkReleaseSpec is the spec of network.release.
 type NetworkReleaseSpec struct {
 	Message string `json:"message"`
+}
+
+// NetworkCertResult is the result of network.cert.request.
+type NetworkCertResult struct {
+	CSR string `json:"csr"`
+}
+
+// WifiInstallSpec is the spec of network.wifi.install.
+type WifiInstallSpec struct {
+	SSID    string `json:"ssid"`
+	CAPem   string `json:"caPem"`
+	CertPem string `json:"certPem"`
+}
+
+// WifiInstallResult is the result of network.wifi.install.
+type WifiInstallResult struct {
+	Installed bool `json:"installed"`
+}
+
+// WifiRemoveSpec is the spec of network.wifi.remove.
+type WifiRemoveSpec struct {
+	SSID string `json:"ssid"`
 }

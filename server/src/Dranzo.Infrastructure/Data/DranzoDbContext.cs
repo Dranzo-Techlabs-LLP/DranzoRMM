@@ -41,6 +41,8 @@ public class DranzoDbContext(DbContextOptions<DranzoDbContext> options, TenantCo
     public DbSet<CveEntry> CveEntries => Set<CveEntry>();
     public DbSet<NetworkDevice> NetworkDevices => Set<NetworkDevice>();
     public DbSet<NetworkController> NetworkControllers => Set<NetworkController>();
+    public DbSet<RadiusConfig> RadiusConfigs => Set<RadiusConfig>();
+    public DbSet<NetworkCertificate> NetworkCertificates => Set<NetworkCertificate>();
     public DbSet<FeedState> FeedStates => Set<FeedState>();
     public DbSet<DeviceVulnerability> DeviceVulnerabilities => Set<DeviceVulnerability>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
@@ -153,6 +155,8 @@ public class DranzoDbContext(DbContextOptions<DranzoDbContext> options, TenantCo
         b.Entity<AuditEvent>().HasIndex(e => e.OccurredAt);
         b.Entity<WebhookDelivery>().HasIndex(e => new { e.DeliveredAt, e.NextAttemptAt });
         b.Entity<NetworkDevice>().HasIndex(e => new { e.SiteId, e.Mac }).IsUnique();
+        b.Entity<RadiusConfig>().HasIndex(e => e.OrganizationId).IsUnique();
+        b.Entity<NetworkCertificate>().HasIndex(e => e.SerialHex).IsUnique();
         b.Entity<NetworkDevice>().HasIndex(e => new { e.OrganizationId, e.Status });
         b.Entity<Device>().HasIndex(e => e.MacAddresses).HasMethod("gin");
 

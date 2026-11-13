@@ -30,6 +30,7 @@ import { formatDuration } from '@/lib/format';
 import { useDocumentTitle } from '@/lib/hooks';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { controllerProblem, wifiProblem, type ControllerForm, type WifiForm } from './model';
+import { RadiusPanel } from './RadiusPanel';
 
 function ControllerDialog({
   controller,
@@ -773,6 +774,9 @@ export default function NetworkControllersPage() {
           </div>
         )}
       </QueryView>
+      <div className="mt-4">
+        <RadiusPanel />
+      </div>
       <Dialog open={adding} onOpenChange={setAdding}>
         <DialogContent className="sm:max-w-2xl">
           {adding ? (

@@ -11,6 +11,7 @@ import {
   controllerProblem,
   deviceKind,
   displayName,
+  radiusProblem,
   wifiProblem,
   type ControllerForm,
   type WifiForm,
@@ -397,5 +398,15 @@ describe('network controller forms', () => {
     expect(wifiProblem('Office', { ...w, subnet: '8.8.8.1/24' }, true)).toMatch(/gateway/);
     expect(wifiProblem('Office', { ...w, subnet: '192.168.10.0/24' }, true)).toMatch(/gateway/);
     expect(wifiProblem('Office', { ...w, enabled: false, ssid: '' }, true)).toBeNull();
+  });
+});
+
+describe('802.1X form', () => {
+  it('needs a private access point range and an SSID', () => {
+    expect(radiusProblem('192.168.1.0/24', 'Office')).toBeNull();
+    expect(radiusProblem('10.0.0.0/8', 'Office')).toBeNull();
+    expect(radiusProblem('0.0.0.0/0', 'Office')).toMatch(/private/);
+    expect(radiusProblem('192.168.1.0', 'Office')).toMatch(/private/);
+    expect(radiusProblem('192.168.1.0/24', '')).toMatch(/Wi-Fi/);
   });
 });

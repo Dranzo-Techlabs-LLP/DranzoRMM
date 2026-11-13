@@ -114,3 +114,16 @@ export function wifiProblem(label: string, w: WifiForm, passphraseRequired: bool
   }
   return null;
 }
+
+const CIDR = /^(10|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}\/([89]|[12]\d|3[0-2])$/;
+
+/** Problem with the 802.1X form, or null. */
+export function radiusProblem(cidr: string, ssid: string): string | null {
+  if (!CIDR.test(cidr.trim())) {
+    return 'Enter the private address range of the access points, for example 192.168.1.0/24.';
+  }
+  if (ssid.length < 1 || ssid.length > 32) {
+    return 'Enter the office Wi-Fi name (1-32 characters).';
+  }
+  return null;
+}

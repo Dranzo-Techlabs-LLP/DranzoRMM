@@ -22,6 +22,11 @@ public sealed class NetworkEnforcer(DranzoDbContext db, UniFiFactory unifi, ILog
             return "nothing to apply";
         }
         var partnerId = rows.First().PartnerId;
+        // A blocked company device also loses its 802.1X certificate (refused by RADIUS within minutes).
+        foreach (var managed in rows.Where(r => r.Status == NetworkDeviceStatus.Blocked && r.ManagedDeviceId is not null))
+        {
+            await RadiusEndpoints.RevokeDeviceCertificatesAsync(db, partnerId, managed.ManagedDeviceId!.Value, DateTimeOffset.UtcNow, ct);
+        }
         // Explicit partner predicate: the rows were loaded through the caller's tenant filter already.
         var controllers = await db.NetworkControllers.IgnoreQueryFilters().Where(c => c.PartnerId == partnerId && c.SiteId != null && siteIds.Contains(c.SiteId.Value)).ToListAsync(ct);
         if (controllers.Count == 0)

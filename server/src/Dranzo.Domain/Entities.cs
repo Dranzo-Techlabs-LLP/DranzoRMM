@@ -254,6 +254,42 @@ public class NetworkController : IOrgOwned
     public string? LastError { get; set; }
 }
 
+/// <summary>802.1X (EAP-TLS) settings of an organization: the FreeRADIUS server that checks device certificates.</summary>
+public class RadiusConfig : IOrgOwned
+{
+    public Guid Id { get; set; }
+    public Guid PartnerId { get; set; }
+    public Guid OrganizationId { get; set; }
+    /// <summary>Access points / controller that may ask the RADIUS server (CIDR).</summary>
+    public required string ClientsCidr { get; set; }
+    /// <summary>SSID of the office Wi-Fi the devices get a profile for.</summary>
+    public required string OfficeSsid { get; set; }
+    /// <summary>RADIUS shared secret, encrypted (SecretProtector purpose "radius").</summary>
+    public required string SharedSecretProtected { get; set; }
+    public long CrlNumber { get; set; } = 1;
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// A Wi-Fi client certificate issued to a device by the organization's network CA. Organization-owned (not deleted
+/// with the device) so that a deleted device's certificate stays on the CRL.
+/// </summary>
+public class NetworkCertificate : IOrgOwned
+{
+    public Guid Id { get; set; }
+    public Guid PartnerId { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid DeviceId { get; set; }
+    public required string SerialHex { get; set; }
+    public required string Thumbprint { get; set; }
+    public DateTimeOffset IssuedAt { get; set; }
+    public DateTimeOffset NotAfter { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    /// <summary>Set when the device confirmed the Wi-Fi profile is installed.</summary>
+    public DateTimeOffset? InstalledAt { get; set; }
+}
+
 public class InventorySnapshot : IDeviceOwned
 {
     public Guid Id { get; set; }
@@ -823,4 +859,7 @@ public static class JobKinds
     public const string NetworkScan = "network.scan";
     public const string NetworkIsolate = "network.isolate";
     public const string NetworkRelease = "network.release";
+    public const string NetworkCertRequest = "network.cert.request";
+    public const string NetworkWifiInstall = "network.wifi.install";
+    public const string NetworkWifiRemove = "network.wifi.remove";
 }

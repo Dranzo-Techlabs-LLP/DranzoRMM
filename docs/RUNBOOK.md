@@ -492,3 +492,13 @@ PPPC profile; Screen Recording can only be made approvable by a standard user, n
 
 The integration uses UniFi Network's classic API (`/proxy/network/api/s/<site>/…`), written against UniFi Network 8/9 and tested against a simulated controller only. Check it on your console before relying on it.
 
+### 12.2 802.1X office Wi-Fi (EAP-TLS)
+
+1. Network → Wi-Fi & controllers → 802.1X: choose the organization, enter the access points' address range and the office Wi-Fi name, **Enable**.
+2. **Download RADIUS server**, copy the folder to an always-on Linux/Docker machine on the office network, run `docker compose up -d` there. UDP 1812 must be reachable from the access points only. It refreshes the CRL from DranzoRMM every 5 minutes (outbound HTTPS to the dashboard address).
+3. **Switch to 802.1X** with the controller and the RADIUS machine's IP: the office SSID becomes WPA2-Enterprise.
+4. **Enroll all devices**. Windows and Linux devices get their certificate and Wi-Fi profile within a minute. Keep the old password network until every device shows as installed.
+5. Revoking, deleting, uninstalling or blocking a device revokes its certificate.
+
+Checked with real FreeRADIUS 3.2.7 and `eapol_test`. The FreeRADIUS image tag is amd64-only; on ARM machines Docker runs it under emulation.
+

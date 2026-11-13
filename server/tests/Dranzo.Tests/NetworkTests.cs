@@ -516,4 +516,138 @@ public class NetworkTests(ServerFixture fx)
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/api/v1/network-controllers/{controllerId}/overview")).StatusCode);
         Assert.Empty((await outsider.GetJsonAsync("/api/v1/network-controllers")).EnumerateArray());
     }
+
+    // ----- 10g: 802.1X / RADIUS -----
+
+    [Fact]
+    public void Network_ca_is_name_constrained_and_issues_wifi_certificates_and_crls()
+    {
+        var store = new Dranzo.Infrastructure.Security.FileKeyStore(Path.Combine(Path.GetTempPath(), "netca-" + Guid.NewGuid().ToString("N")));
+        var ca = new Dranzo.Infrastructure.Security.NetworkCertificateAuthority(store);
+        var org = Guid.NewGuid();
+        using var root = ca.GetOrCreate(org);
+        var nc = root.Extensions["2.5.29.30"];
+        Assert.NotNull(nc);
+        Assert.True(nc!.Critical);
+        Assert.Contains("dranzo-radius.invalid", System.Text.Encoding.ASCII.GetString(nc.RawData), StringComparison.Ordinal);
+        Assert.Equal(root.Thumbprint, ca.GetOrCreate(org).Thumbprint); // stable
+
+        // The RADIUS server certificate chains to the CA.
+        var (serverPem, _) = ca.IssueServer(org);
+        using var server = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(serverPem);
+        using var chain = new System.Security.Cryptography.X509Certificates.X509Chain();
+        chain.ChainPolicy.TrustMode = System.Security.Cryptography.X509Certificates.X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.CustomTrustStore.Add(root);
+        chain.ChainPolicy.RevocationMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck;
+        Assert.True(chain.Build(server), string.Join(", ", chain.ChainStatus.Select(st => st.StatusInformation)));
+
+        // A client certificate from a device CSR; the CSR's own subject is ignored.
+        using var key = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var csr = new System.Security.Cryptography.X509Certificates.CertificateRequest("CN=evil.example.com", key, System.Security.Cryptography.HashAlgorithmName.SHA256).CreateSigningRequestPem();
+        var device = Guid.NewGuid();
+        var (clientPem, serial, _, _) = ca.IssueClient(org, csr, device);
+        using var client = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(clientPem);
+        Assert.Equal($"CN={device:D}, O=DranzoRMM Wi-Fi", client.Subject);
+        Assert.Throws<System.Security.Cryptography.CryptographicException>(() => ca.IssueClient(org, csr.Replace("A", "B", StringComparison.Ordinal), device));
+
+        // The CRL lists revoked serials and is signed by the CA.
+        var crlPem = ca.CrlPem(org, [(serial, DateTimeOffset.UtcNow)], 7, DateTimeOffset.UtcNow);
+        var crl = System.Security.Cryptography.X509Certificates.CertificateRevocationListBuilder.Load(
+            Convert.FromBase64String(string.Concat(crlPem.Split('\n').Where(l => !l.StartsWith("-----", StringComparison.Ordinal)))), out var number);
+        Assert.Equal(7, (int)number);
+        Assert.True(crl.RemoveEntry(Convert.FromHexString(serial)));
+    }
+
+    [Fact]
+    public async Task Radius_enrollment_issues_certificates_installs_profiles_and_revokes()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Rad " + U);
+        await using var win = await TestAgent.EnrollAsync(fx, org.Token, "rad-win", os: "windows");
+
+        // Only partner-wide network admins, with a fresh code.
+        var netAdmin = await fx.CreateUserAsync($"radorg-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, org.OrgId);
+        await netAdmin.StepUpAsync();
+        Assert.Equal(HttpStatusCode.Forbidden, (await netAdmin.PostAsync("/api/v1/radius", new { organizationId = org.OrgId, clientsCidr = "192.168.1.0/24", officeSsid = "Office" })).StatusCode);
+        await admin.StepUpAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsync("/api/v1/radius", new { organizationId = org.OrgId, clientsCidr = "0.0.0.0/0", officeSsid = "Office" })).StatusCode);
+        var config = await admin.PostJsonAsync("/api/v1/radius", new { organizationId = org.OrgId, clientsCidr = "192.168.1.0/24", officeSsid = "Dranzo-Office" });
+        var configId = config.GetProperty("id").GetGuid();
+
+        // The bundle holds a working FreeRADIUS configuration; its download is audited.
+        await admin.StepUpAsync();
+        var bundle = await admin.GetAsync($"/api/v1/radius/{configId}/bundle.zip");
+        Assert.Equal(HttpStatusCode.OK, bundle.StatusCode);
+        using (var zip = new System.IO.Compression.ZipArchive(await bundle.Content.ReadAsStreamAsync()))
+        {
+            Assert.Equal(["Dockerfile", "README.txt", "certs/ca.pem", "certs/server.key", "certs/server.pem", "clients.conf", "docker-compose.yml", "eap", "update-crl.sh"], zip.Entries.Select(e => e.FullName).Order(StringComparer.Ordinal));
+            using var reader = new StreamReader(zip.GetEntry("clients.conf")!.Open());
+            Assert.Contains("ipaddr = 192.168.1.0/24", await reader.ReadToEndAsync(), StringComparison.Ordinal);
+        }
+        Assert.Equal(1, (await admin.GetJsonAsync($"/api/v1/audit?organizationId={org.OrgId}&action=radius.bundle_download")).GetProperty("total").GetInt32());
+
+        // Enroll: the agent sends a CSR, gets the certificate and the Wi-Fi profile.
+        await admin.StepUpAsync();
+        var enroll = await admin.PostJsonAsync($"/api/v1/radius/{configId}/enroll", new { });
+        Assert.Equal(1, enroll.GetProperty("deviceCount").GetInt32());
+        var req = await win.NextJobAsync("network.cert.request");
+        using var key = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var csr = new System.Security.Cryptography.X509Certificates.CertificateRequest("CN=x", key, System.Security.Cryptography.HashAlgorithmName.SHA256).CreateSigningRequestPem();
+        await win.CompleteAsync(req, result: new { csr });
+        var install = await win.NextJobAsync("network.wifi.install");
+        var spec = install.Payload.GetProperty("spec");
+        Assert.Equal("Dranzo-Office", spec.GetProperty("ssid").GetString());
+        Assert.Contains("BEGIN CERTIFICATE", spec.GetProperty("caPem").GetString(), StringComparison.Ordinal);
+        using var cert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(spec.GetProperty("certPem").GetString());
+        Assert.Contains(win.DeviceId.ToString("D"), cert.Subject, StringComparison.Ordinal);
+        await win.CompleteAsync(install, result: new { installed = true });
+        var status = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/radius?organizationId={org.OrgId}"), r => r[0].GetProperty("installedCertificates").GetInt32() == 1);
+        Assert.Equal(1, status[0].GetProperty("activeCertificates").GetInt32());
+
+        // The CRL is public and lists the certificate once the device is revoked.
+        var anonymous = fx.NewClient();
+        var crl0 = await anonymous.GetAsync($"/api/v1/pki/network/{org.OrgId}/crl.pem");
+        Assert.Equal(HttpStatusCode.OK, crl0.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"/api/v1/pki/network/{Guid.NewGuid()}/crl.pem")).StatusCode);
+        await admin.StepUpAsync();
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/v1/devices/{win.DeviceId}/revoke")).StatusCode);
+        var crlPem = await (await anonymous.GetAsync($"/api/v1/pki/network/{org.OrgId}/crl.pem")).Content.ReadAsStringAsync();
+        var crl = System.Security.Cryptography.X509Certificates.CertificateRevocationListBuilder.Load(
+            Convert.FromBase64String(string.Concat(crlPem.Split('\n').Where(l => !l.StartsWith("-----", StringComparison.Ordinal)))), out _);
+        Assert.True(crl.RemoveEntry(cert.SerialNumberBytes.Span));
+
+        // Another organization sees nothing.
+        var other = await fx.SeedOrgAsync("Rad other " + U);
+        var outsider = await fx.CreateUserAsync($"radout-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, other.OrgId);
+        Assert.Empty((await outsider.GetJsonAsync($"/api/v1/radius?organizationId={org.OrgId}")).EnumerateArray());
+    }
+
+    /// <summary>Writes a RADIUS bundle to DRANZO_RADIUS_BUNDLE_OUT for a check with real FreeRADIUS (opt-in).</summary>
+    [Fact]
+    public void Write_radius_bundle_for_freeradius_check()
+    {
+        var outDir = Environment.GetEnvironmentVariable("DRANZO_RADIUS_BUNDLE_OUT");
+        if (string.IsNullOrEmpty(outDir))
+        {
+            return;
+        }
+        var ca = new Dranzo.Infrastructure.Security.NetworkCertificateAuthority(new Dranzo.Infrastructure.Security.FileKeyStore(Path.Combine(outDir, "keys")));
+        var org = Guid.NewGuid();
+        var (cert, key) = ca.IssueServer(org);
+        // Loopback here only so eapol_test inside the same container may ask; real bundles require a private range.
+        var config = new RadiusConfig { Id = Guid.NewGuid(), OrganizationId = org, ClientsCidr = "127.0.0.0/8", OfficeSsid = "Office", SharedSecretProtected = "" };
+        File.WriteAllBytes(Path.Combine(outDir, "bundle.zip"), RadiusEndpoints.Bundle(config, "test-shared-secret", ca.CaPem(org), cert, key, "http://127.0.0.1:9/crl.pem"));
+        string revokedSerial = "";
+        foreach (var name in new[] { "good", "revoked" })
+        {
+            using var k = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+            var csr = new System.Security.Cryptography.X509Certificates.CertificateRequest("CN=x", k, System.Security.Cryptography.HashAlgorithmName.SHA256).CreateSigningRequestPem();
+            var (pem, serial, _, _) = ca.IssueClient(org, csr, Guid.NewGuid());
+            File.WriteAllText(Path.Combine(outDir, name + ".pem"), pem + "\n");
+            File.WriteAllText(Path.Combine(outDir, name + ".key"), k.ExportPkcs8PrivateKeyPem() + "\n");
+            revokedSerial = serial;
+        }
+        File.WriteAllText(Path.Combine(outDir, "crl.pem"), ca.CrlPem(org, [(revokedSerial, DateTimeOffset.UtcNow.AddMinutes(-1))], 1, DateTimeOffset.UtcNow) + "\n");
+        File.WriteAllText(Path.Combine(outDir, "ca.pem"), ca.CaPem(org) + "\n");
+    }
 }

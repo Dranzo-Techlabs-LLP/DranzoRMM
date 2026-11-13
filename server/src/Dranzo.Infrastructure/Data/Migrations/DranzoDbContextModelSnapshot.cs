@@ -1194,6 +1194,49 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.ToTable("JobRuns");
                 });
 
+            modelBuilder.Entity("Dranzo.Domain.NetworkCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("InstalledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("NotAfter")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SerialHex")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Thumbprint")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SerialHex")
+                        .IsUnique();
+
+                    b.ToTable("NetworkCertificates");
+                });
+
             modelBuilder.Entity("Dranzo.Domain.NetworkController", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1719,6 +1762,47 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.HasIndex("DeviceId", "IsLatest");
 
                     b.ToTable("PostureSnapshots");
+                });
+
+            modelBuilder.Entity("Dranzo.Domain.RadiusConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientsCidr")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CrlNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OfficeSsid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SharedSecretProtected")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
+
+                    b.ToTable("RadiusConfigs");
                 });
 
             modelBuilder.Entity("Dranzo.Domain.RemoteSession", b =>

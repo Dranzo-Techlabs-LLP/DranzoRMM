@@ -255,6 +255,7 @@ public static class DeviceEndpoints
             d.PrevCertThumbprint = null;
             d.IsOnline = false;
             await c.Db.SaveChangesAsync(ct);
+            await RadiusEndpoints.RevokeDeviceCertificatesAsync(c.Db, d.PartnerId, id, c.Now, ct);
             registry.Disconnect(id, "revoked");
             await c.Audit("device.revoke", organizationId: d.OrganizationId, deviceId: id, targetType: "device", targetId: id, detail: new { d.Hostname }, ct: ct);
             return Results.NoContent();
@@ -269,6 +270,7 @@ public static class DeviceEndpoints
             }
             c.Db.Devices.Remove(d);
             await c.Db.SaveChangesAsync(ct);
+            await RadiusEndpoints.RevokeDeviceCertificatesAsync(c.Db, d.PartnerId, id, c.Now, ct);
             registry.Disconnect(id, "deleted");
             await c.Audit("device.delete", organizationId: d.OrganizationId, deviceId: id, targetType: "device", targetId: id, detail: new { d.Hostname }, ct: ct);
             return Results.NoContent();

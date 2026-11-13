@@ -274,6 +274,7 @@ public sealed class Scheduler(IServiceScopeFactory scopes, ILogger<Scheduler> lo
         JobKinds.SoftwareInstall or JobKinds.SoftwareUninstall or JobKinds.PackageInstall or JobKinds.PackageUninstall => Permissions.SoftwareDeploy,
         JobKinds.NetworkScan => Permissions.NetworkManage,
         JobKinds.NetworkIsolate or JobKinds.NetworkRelease => Permissions.DevicesIsolate,
+        JobKinds.NetworkCertRequest or JobKinds.NetworkWifiInstall or JobKinds.NetworkWifiRemove => Permissions.NetworkConfigure,
         _ => Permissions.DevicesManage,
     };
 

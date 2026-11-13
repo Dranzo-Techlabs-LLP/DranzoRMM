@@ -137,9 +137,60 @@ export const controllersApi = {
     api.post<{ steps: string[] }>(`/network-controllers/${id}/wifi-setup`, input),
 };
 
+export interface RadiusStatus {
+  id: Id;
+  organizationId: Id;
+  clientsCidr: string;
+  officeSsid: string;
+  createdAt: IsoDate;
+  updatedAt: IsoDate;
+  caPem: string;
+  activeCertificates: number;
+  installedCertificates: number;
+  revokedCertificates: number;
+}
+
+export const radiusApi = {
+  list: (organizationId?: Id) => api.get<RadiusStatus[]>('/radius', { query: { organizationId } }),
+  /** Enables or updates 802.1X for an organization. Partner-wide network.configure + step-up. */
+  save: (input: { organizationId: Id; clientsCidr: string; officeSsid: string }) =>
+    api.post<{ id: Id }>('/radius', input),
+  /**
+   * Downloads the FreeRADIUS bundle (private key and shared secret inside). The server asks for a fresh authenticator
+   * code; on `401 step_up_required` the step-up dialog opens and the download is tried once more.
+   */
+  downloadBundle: async (id: Id) => {
+    const url = `/api/v1/radius/${id}/bundle.zip`;
+    let res = await fetch(url, { credentials: 'same-origin' });
+    if (res.status === 401 && (await res.clone().text()).includes('step_up_required')) {
+      if (!(await api.confirmStepUp())) {
+        return false;
+      }
+      res = await fetch(url, { credentials: 'same-origin' });
+    }
+    if (!res.ok) {
+      throw new Error(`Download failed (HTTP ${String(res.status)}).`);
+    }
+    const href = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = 'dranzo-radius.zip';
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(href);
+    }, 10_000);
+    return true;
+  },
+  enroll: (id: Id, deviceIds?: Id[]) =>
+    api.post<{ jobId: Id; deviceCount: number }>(`/radius/${id}/enroll`, { deviceIds }),
+  useOnUnifi: (id: Id, input: { controllerId: Id; radiusHost: string; radiusPort?: number }) =>
+    api.post<{ ssid: string; security: string }>(`/radius/${id}/unifi`, input),
+};
+
 export const networkKeys = {
   all: ['network'] as const,
   devices: (filter: NetworkDeviceFilter) => ['network', 'devices', filter] as const,
   controllers: (organizationId?: Id) => ['network', 'controllers', organizationId ?? 'all'] as const,
   overview: (id: Id) => ['network', 'controller-overview', id] as const,
+  radius: (organizationId?: Id) => ['network', 'radius', organizationId ?? 'all'] as const,
 };

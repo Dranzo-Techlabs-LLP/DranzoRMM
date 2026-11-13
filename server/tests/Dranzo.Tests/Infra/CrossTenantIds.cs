@@ -114,5 +114,10 @@ public static partial class CrossTenantSeedExtensions
         fx.UniFi.Add("xb-unifi.example.test");
         var controller = await admin.PostJsonAsync("/api/v1/network-controllers", new { organizationId = b.OrgId, name = "xb-secret controller", baseUrl = "https://xb-unifi.example.test", authMode = "apikey", secret = FakeUniFi.ApiKey });
         ids.Map("network-controllers", controller.GetProperty("id").GetGuid());
+        // 802.1X settings of organization B.
+        await admin.StepUpAsync();
+        var radius = await admin.PostJsonAsync("/api/v1/radius", new { organizationId = b.OrgId, clientsCidr = "10.66.0.0/24", officeSsid = "xb-secret-ssid" });
+        ids.Map("radius", radius.GetProperty("id").GetGuid());
+        ids.Map("pki", Guid.NewGuid(), leakMarker: false);
     }
 }
