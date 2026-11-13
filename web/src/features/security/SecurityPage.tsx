@@ -21,8 +21,8 @@ import { formatDateTime } from '@/lib/format';
 import { useDocumentTitle } from '@/lib/hooks';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { cn } from '@/lib/utils';
-import { CveLink, KnownExploitedBadge, TriStateMark, VulnSeverity } from './posture';
-import { matchesPostureFilter, VULN_SEVERITIES, type PostureFilter } from './posture-model';
+import { CveLink, KnownExploitedBadge, ScoreBadge, TriStateMark, VulnSeverity } from './posture';
+import { LOW_SCORE, matchesPostureFilter, VULN_SEVERITIES, type PostureFilter } from './posture-model';
 
 const PAGE_SIZE = 50;
 type Section = 'posture' | 'vulnerabilities' | 'feeds';
@@ -100,6 +100,12 @@ const CARDS: {
     count: (d) => d.withKnownExploited,
     note: 'Devices with at least one',
   },
+  {
+    filter: 'low-score',
+    label: 'Low security score',
+    count: (d) => d.items.filter((i) => i.score !== null && i.score < LOW_SCORE).length,
+    note: `Score below ${String(LOW_SCORE)}`,
+  },
 ];
 
 function PostureSection() {
@@ -128,11 +134,13 @@ function PostureSection() {
   return (
     <QueryView query={posture} what="security posture">
       {(data) => {
-        const rows = data.items.filter((r) => matchesPostureFilter(r, filter));
+        const rows = data.items
+          .filter((r) => matchesPostureFilter(r, filter))
+          .sort((a, b) => (a.score ?? 101) - (b.score ?? 101) || a.hostname.localeCompare(b.hostname));
         const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
         return (
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-            <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
               {CARDS.map((card) => {
                 const count = card.count(data);
                 const selected = filter === card.filter;
@@ -173,7 +181,7 @@ function PostureSection() {
 
             <Panel
               title={`${filter ? `${rows.length} of ${data.total}` : data.total} ${data.total === 1 ? 'device' : 'devices'}${organization ? ` in ${organization.name}` : ''}`}
-              description="Active devices. Unknown means the device has not reported that item, or its operating system cannot."
+              description={`${data.averageScore === null ? '' : `Average security score ${String(data.averageScore)}. `}Lowest score first. Unknown means the device has not reported that item, or its operating system cannot.`}
               actions={
                 <>
                   {filter ? (
@@ -218,6 +226,7 @@ function PostureSection() {
                       <TableHeader>
                         <TableRow>
                           <TableHead scope="col">Device</TableHead>
+                          <TableHead scope="col">Score</TableHead>
                           <TableHead scope="col">Antivirus</TableHead>
                           <TableHead scope="col">Firewall</TableHead>
                           <TableHead scope="col">Disk encryption</TableHead>
@@ -250,6 +259,9 @@ function PostureSection() {
                                   .join(' · ')}
                               </div>
                             </TableHead>
+                            <TableCell>
+                              <ScoreBadge score={r.score} grade={r.grade} />
+                            </TableCell>
                             <TableCell>
                               <TriStateMark value={r.antivirusOk} />
                             </TableCell>

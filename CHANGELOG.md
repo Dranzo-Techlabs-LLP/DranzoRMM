@@ -6,6 +6,7 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 
 ### Phase 10: Network and firewall
 - Permissions `network.read`, `network.manage`, `network.configure`, `devices.isolate` and the built-in role Network Admin.
+- Security score per device (0-100, A-F) with the reason for every lost point; shown on the device, on the Security page (lowest first, average, low-score filter) and in the security-posture report.
 - Access review: every user and API key with roles, scopes, effective permissions and findings (no MFA, inactive 90+ days, never-expiring keys, full admins). Page under Admin, CSV/PDF report, partner admins only, viewing is audited.
 
 ### Fixes after first LAN testing

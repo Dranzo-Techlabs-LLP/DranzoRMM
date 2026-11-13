@@ -99,7 +99,7 @@ Verification environment: macOS (Apple Silicon) dev machine, local PostgreSQL 16
 Requested after the first LAN tests: individual system security and firewall, separate guest and office Wi-Fi (UniFi), central device and network access management, central network administration. Approved plan: firewall rule policies, device isolation, security score, network discovery, approval list, Network Admin role, access review, UniFi integration, 802.1X/RADIUS.
 
 - [x] 10a Permissions `network.read`, `network.manage`, `network.configure` (interactive only), `devices.isolate`; built-in role **Network Admin**; access review page and report (users, API keys, roles, scopes, effective permissions, findings)
-- [ ] 10b Security score
+- [x] 10b Security score 0-100 with grade and per-part reasons (antivirus 20, firewall 15, encryption 15, updates 20, policies 15, vulnerabilities 15; unknown parts left out). Device Security tab card, score column, low-score filter and average on Security, score in the security-posture report
 - [ ] 10c Network discovery and device approval list
 - [ ] 10d Firewall rule policies
 - [ ] 10e Device isolation

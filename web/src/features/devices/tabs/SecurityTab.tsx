@@ -3,10 +3,12 @@ import { ScanSearch, ShieldQuestion } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { EmptyState, Panel, QueryView } from '@/components/page';
 import { RelativeTime } from '@/components/relative-time';
-import { InlineAlert } from '@/components/status';
+import { InlineAlert, StatusPill } from '@/components/status';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CveLink, KnownExploitedBadge, TriStateMark, VulnSeverity } from '@/features/security/posture';
+import { scoreTone } from '@/features/security/posture-model';
+import { cn } from '@/lib/utils';
 import { securityApi, securityKeys, type DevicePosture } from '@/lib/api/security';
 import { P } from '@/lib/auth/permissions';
 import { useAccess } from '@/lib/auth/session';
@@ -35,6 +37,55 @@ function Section({ title, summary, children }: { title: string; summary?: ReactN
   return (
     <Panel title={title} actions={summary}>
       {children}
+    </Panel>
+  );
+}
+
+const COMPONENT_TONE = { ok: 'ok', warn: 'warn', bad: 'danger', unknown: 'idle' } as const;
+const SCORE_TEXT = { ok: 'text-ok', warn: 'text-warn', danger: 'text-danger', idle: 'text-muted-foreground' } as const;
+const COMPONENT_WORD = { ok: 'OK', warn: 'Attention', bad: 'Problem', unknown: 'Unknown' } as const;
+
+function ScoreCard({ deviceId }: { deviceId: string }) {
+  const score = useQuery({
+    queryKey: securityKeys.deviceScore(deviceId),
+    queryFn: () => securityApi.deviceScore(deviceId),
+    refetchInterval: 60_000,
+  });
+  if (!score.data) {
+    return null;
+  }
+  const s = score.data;
+  return (
+    <Panel
+      title="Security score"
+      description="Antivirus, firewall, disk encryption, updates, policy compliance and vulnerabilities. Unknown parts are left out of the score."
+    >
+      <div className="flex flex-wrap items-start gap-6">
+        <div className="min-w-24">
+          <div className={cn('text-4xl font-semibold tabular-nums', SCORE_TEXT[scoreTone(s.score)])}>
+            {s.score ?? '–'}
+          </div>
+          <div className="text-muted-foreground text-xs">
+            {s.score === null ? 'Not enough data yet' : `Grade ${s.grade} of A–F`}
+          </div>
+        </div>
+        <ul className="grid flex-1 gap-1.5 sm:grid-cols-2">
+          {s.components.map((c) => (
+            <li key={c.key} className="flex items-start justify-between gap-3 rounded-md border px-3 py-2">
+              <div>
+                <div className="font-medium">{c.label}</div>
+                <div className="text-muted-foreground text-xs">{c.reason}</div>
+              </div>
+              <div className="text-right">
+                <StatusPill tone={COMPONENT_TONE[c.status]}>{COMPONENT_WORD[c.status]}</StatusPill>
+                <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
+                  {c.earned === null ? '—' : `${String(Math.round(c.earned * 10) / 10)} / ${String(c.weight)}`}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </Panel>
   );
 }
@@ -281,6 +332,7 @@ export function SecurityTab({ device }: DeviceTabProps) {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+      <ScoreCard deviceId={device.id} />
       <QueryView query={posture} what="security posture">
         {(data) =>
           data === null ? (

@@ -23,6 +23,27 @@ export interface PostureRow {
   vulnerabilities: number;
   knownExploited: number;
   criticalVulnerabilities: number;
+  /** Security score 0-100; `null` when too little is known. */
+  score: number | null;
+  /** A-F, or `?` without a score. */
+  grade: string;
+}
+
+export interface ScoreComponent {
+  key: string;
+  label: string;
+  weight: number;
+  /** `null` when this part is unknown and left out of the score. */
+  earned: number | null;
+  status: 'ok' | 'warn' | 'bad' | 'unknown';
+  reason: string;
+}
+
+export interface SecurityScore {
+  score: number | null;
+  grade: string;
+  components: ScoreComponent[];
+  isolated: boolean;
 }
 
 export interface PostureOverview {
@@ -32,6 +53,7 @@ export interface PostureOverview {
   encryptionIssues: number;
   notReporting: number;
   withKnownExploited: number;
+  averageScore: number | null;
   items: PostureRow[];
 }
 
@@ -115,6 +137,8 @@ export const securityApi = {
   /** `null` until the device has reported. */
   devicePosture: (deviceId: Id) => api.get<DevicePosture | null>(`/devices/${deviceId}/posture`),
   deviceVulnerabilities: (deviceId: Id) => api.get<DeviceVulnerability[]>(`/devices/${deviceId}/vulnerabilities`),
+  /** `null` for a revoked device. */
+  deviceScore: (deviceId: Id) => api.get<SecurityScore | null>(`/devices/${deviceId}/security-score`),
   vulnerabilities: (filter: VulnerabilityFilter) =>
     api.get<VulnerabilityList>('/vulnerabilities', { query: { ...filter } }),
   feedStatus: () => api.get<FeedStatus>('/vulnerabilities/feed-status'),
@@ -128,6 +152,7 @@ export const securityKeys = {
   posture: (organizationId?: Id) => ['security', 'posture', organizationId ?? 'all'] as const,
   devicePosture: (deviceId: Id) => ['security', 'device-posture', deviceId] as const,
   deviceVulnerabilities: (deviceId: Id) => ['security', 'device-vulnerabilities', deviceId] as const,
+  deviceScore: (deviceId: Id) => ['security', 'device-score', deviceId] as const,
   vulnerabilities: (filter: VulnerabilityFilter) => ['security', 'vulnerabilities', filter] as const,
   feedStatus: ['security', 'feed-status'] as const,
 };

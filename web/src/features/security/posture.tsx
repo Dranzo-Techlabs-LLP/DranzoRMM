@@ -1,7 +1,7 @@
 import { CircleCheck, CircleHelp, CircleX, ShieldAlert } from 'lucide-react';
 import { StatusPill, type Tone } from '@/components/status';
 import type { TriState } from '@/lib/api/security';
-import { nvdUrl } from './posture-model';
+import { nvdUrl, scoreTone } from './posture-model';
 import { cn } from '@/lib/utils';
 
 /**
@@ -68,4 +68,9 @@ export function CveLink({ cveId }: { cveId: string }) {
   ) : (
     <span className="ident font-medium">{cveId}</span>
   );
+}
+
+/** Score with its grade, for tables. Colour is never the only signal: the number and letter are always shown. */
+export function ScoreBadge({ score, grade }: { score: number | null; grade: string }) {
+  return <StatusPill tone={scoreTone(score)}>{score === null ? 'No score' : `${score} · ${grade}`}</StatusPill>;
 }

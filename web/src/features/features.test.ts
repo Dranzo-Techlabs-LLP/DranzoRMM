@@ -6,9 +6,11 @@ import { formatAuditDetail, resultTone } from '@/features/audit/detail';
 import { readDeviceFilters, toApiFilter, writeDeviceFilters } from '@/features/devices/filters';
 import { installCommands, tokenState } from '@/features/enrollment/tokens';
 import { timeZoneOptions } from '@/features/organizations/timezones';
+import { matchesPostureFilter, scoreTone } from '@/features/security/posture-model';
 import { countDevices, summarizeByOrganization } from '@/features/overview/fleet';
 import { auditApi, type DeviceListItem, type EnrollmentToken, type InstallInfo, type Organization } from '@/lib/api';
 import type { AccessPrincipal } from '@/lib/api/access';
+import type { PostureRow } from '@/lib/api/security';
 import { formatBytes, formatDuration, formatRelative, localInputToIso } from '@/lib/format';
 
 const org = (id: string, name: string, deviceCount = 0, onlineCount = 0): Organization => ({
@@ -281,5 +283,19 @@ describe('access review', () => {
       { ...base, id: '3', disabled: true, findings: ['MFA not set up'] },
     ];
     expect(reviewSummary(rows)).toEqual({ users: 2, apiKeys: 1, withFindings: 2, fullAdmins: 1 });
+  });
+});
+
+describe('security score display', () => {
+  it('colours scores by band and filters low scores', () => {
+    expect(scoreTone(null)).toBe('idle');
+    expect(scoreTone(90)).toBe('ok');
+    expect(scoreTone(75)).toBe('ok');
+    expect(scoreTone(74)).toBe('warn');
+    expect(scoreTone(59)).toBe('danger');
+    const row = { score: 40 } as PostureRow;
+    expect(matchesPostureFilter(row, 'low-score')).toBe(true);
+    expect(matchesPostureFilter({ ...row, score: 60 }, 'low-score')).toBe(false);
+    expect(matchesPostureFilter({ ...row, score: null }, 'low-score')).toBe(false);
   });
 });

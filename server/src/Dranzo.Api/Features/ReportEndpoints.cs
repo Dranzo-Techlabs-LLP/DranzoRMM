@@ -148,14 +148,16 @@ public static class ReportEndpoints
             var posture = await c.Db.PostureSnapshots.AsNoTracking().Where(p => p.IsLatest && (organizationId == null || p.OrganizationId == organizationId)).ToDictionaryAsync(p => p.DeviceId, ct);
             var vulns = await c.Db.DeviceVulnerabilities.AsNoTracking().Where(v => organizationId == null || v.OrganizationId == organizationId)
                 .GroupBy(v => v.DeviceId).Select(g => new { g.Key, Total = g.Count(), Kev = g.Count(x => x.KnownExploited) }).ToDictionaryAsync(x => x.Key, ct);
+            var scores = await SecurityScore.LoadAsync(c.Db, organizationId, null, ct);
             static string Tri(bool? v) => v switch { true => "ok", false => "ISSUE", _ => "unknown" };
             return await RenderAsync(format, "security-posture", new ReportData("Security posture",
-                ["Organization", "Hostname", "OS", "Antivirus", "Firewall", "Disk encryption", "Local admins", "Vulnerabilities", "Known exploited", "Pending reboot", "Collected"],
+                ["Organization", "Hostname", "OS", "Score", "Grade", "Antivirus", "Firewall", "Disk encryption", "Local admins", "Vulnerabilities", "Known exploited", "Pending reboot", "Collected"],
                 [.. devices.Select(d =>
                 {
                     var p = posture.GetValueOrDefault(d.Id);
                     var v = vulns.GetValueOrDefault(d.Id);
-                    return new object?[] { orgs.GetValueOrDefault(d.OrganizationId), d.Hostname, d.Os, Tri(p?.AntivirusOk), Tri(p?.FirewallOk), Tri(p?.EncryptionOk), p?.LocalAdmins ?? [], v?.Total ?? 0, v?.Kev ?? 0, d.PendingReboot, p?.CollectedAt };
+                    var score = scores.TryGetValue(d.Id, out var si) ? SecurityScore.Compute(si, c.Now) : null;
+                    return new object?[] { orgs.GetValueOrDefault(d.OrganizationId), d.Hostname, d.Os, score?.Score, score?.Grade, Tri(p?.AntivirusOk), Tri(p?.FirewallOk), Tri(p?.EncryptionOk), p?.LocalAdmins ?? [], v?.Total ?? 0, v?.Kev ?? 0, d.PendingReboot, p?.CollectedAt };
                 })]), c, organizationId, ct);
         }).RequirePermission(Permissions.ReportsRead);
 
