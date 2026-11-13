@@ -39,6 +39,7 @@ public class DranzoDbContext(DbContextOptions<DranzoDbContext> options, TenantCo
     public DbSet<PatchPolicy> PatchPolicies => Set<PatchPolicy>();
     public DbSet<PostureSnapshot> PostureSnapshots => Set<PostureSnapshot>();
     public DbSet<CveEntry> CveEntries => Set<CveEntry>();
+    public DbSet<NetworkDevice> NetworkDevices => Set<NetworkDevice>();
     public DbSet<FeedState> FeedStates => Set<FeedState>();
     public DbSet<DeviceVulnerability> DeviceVulnerabilities => Set<DeviceVulnerability>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
@@ -150,6 +151,9 @@ public class DranzoDbContext(DbContextOptions<DranzoDbContext> options, TenantCo
         b.Entity<AuditEvent>().HasIndex(e => new { e.PartnerId, e.Sequence }).IsUnique();
         b.Entity<AuditEvent>().HasIndex(e => e.OccurredAt);
         b.Entity<WebhookDelivery>().HasIndex(e => new { e.DeliveredAt, e.NextAttemptAt });
+        b.Entity<NetworkDevice>().HasIndex(e => new { e.SiteId, e.Mac }).IsUnique();
+        b.Entity<NetworkDevice>().HasIndex(e => new { e.OrganizationId, e.Status });
+        b.Entity<Device>().HasIndex(e => e.MacAddresses).HasMethod("gin");
 
         // Device-owned rows are removed with their device, except audit events (never deleted).
         foreach (var entity in b.Model.GetEntityTypes().Where(t => typeof(IDeviceOwned).IsAssignableFrom(t.ClrType)))

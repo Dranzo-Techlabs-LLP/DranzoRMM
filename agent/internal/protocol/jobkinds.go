@@ -23,6 +23,7 @@ const (
 	KindMeshUninstall     = "mesh.uninstall"
 	KindAgentConfigure    = "agent.configure"
 	KindAgentUninstall    = "agent.uninstall"
+	KindNetworkScan       = "network.scan"
 )
 
 // Job limits (sections 3 and 6.1).
@@ -254,4 +255,27 @@ type UninstallCode struct {
 // decoded by the handler from raw JSON; this struct is the typed form.
 type AgentConfigureSpec struct {
 	UninstallCode *UninstallCode `json:"uninstallCode"`
+}
+
+// NetworkScanSpec is the spec of network.scan.
+type NetworkScanSpec struct {
+	ResolveNames bool `json:"resolveNames"`
+}
+
+// NetworkNeighbor is one device seen on the local network.
+type NetworkNeighbor struct {
+	IP         string `json:"ip"`
+	MAC        string `json:"mac"`
+	Hostname   string `json:"hostname,omitempty"`
+	Gateway    bool   `json:"gateway,omitempty"`
+	Randomized bool   `json:"randomized,omitempty"`
+}
+
+// NetworkScanResult is the result of network.scan.
+type NetworkScanResult struct {
+	ScannedAt time.Time         `json:"scannedAt"`
+	Subnets   []string          `json:"subnets"`
+	Gateway   string            `json:"gateway"`
+	Neighbors []NetworkNeighbor `json:"neighbors"`
+	Truncated bool              `json:"truncated"`
 }

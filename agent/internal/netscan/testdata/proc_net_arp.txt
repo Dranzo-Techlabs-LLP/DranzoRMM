@@ -1,0 +1,5 @@
+IP address       HW type     Flags       HW address            Mask     Device
+192.168.68.1     0x1         0x2         a4:83:e7:11:22:33     *        eth0
+192.168.68.50    0x1         0x0         00:00:00:00:00:00     *        eth0
+192.168.68.106   0x1         0x2         04:d9:f5:0a:0b:0c     *        eth0
+172.17.0.2       0x1         0x2         02:42:ac:11:00:02     *        docker0

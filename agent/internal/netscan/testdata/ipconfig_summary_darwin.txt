@@ -1,0 +1,8 @@
+<dictionary> {
+  BSSID : a4:83:e7:11:22:40
+  InterfaceType : WiFi
+  LinkStatusActive : TRUE
+  NetworkID : 1B2C
+  SSID : <redacted>
+  Security : WPA2_PSK
+}

@@ -138,6 +138,11 @@ public sealed class InventoryProcessor(DranzoDbContext db, LiveNotifier live, Al
             device.Hostname = hostname;
         }
 
+        device.MacAddresses = [.. payload.Arr("network", 32).Select(n => Features.NetworkRules.NormalizeMac(n.Str("mac", 32))).OfType<string>().Distinct().Take(16)];
+        device.DefaultGateway = Features.NetworkRules.Ipv4OrNull(payload.Str("defaultGateway", 15));
+        var wifi = payload.Obj("wifi");
+        device.WifiSsid = wifi.ValueKind == JsonValueKind.Object ? wifi.Str("ssid", 64) : null;
+
         await db.InventorySnapshots.Where(i => i.DeviceId == device.Id && i.IsLatest).ExecuteUpdateAsync(s => s.SetProperty(i => i.IsLatest, false), ct);
         db.InventorySnapshots.Add(new InventorySnapshot
         {

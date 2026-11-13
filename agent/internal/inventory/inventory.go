@@ -20,6 +20,7 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/process"
 
+	"github.com/dranzo/dranzormm/agent/internal/netscan"
 	"github.com/dranzo/dranzormm/agent/internal/platform"
 	"github.com/dranzo/dranzormm/agent/internal/protocol"
 )
@@ -182,6 +183,11 @@ func (c *Collector) Collect(ctx context.Context) *protocol.Inventory {
 		inv.Network = FilterInterfaces(raw)
 	} else {
 		miss("network")
+	}
+
+	inv.DefaultGateway = netscan.DefaultGateway(ctx, c.Platform)
+	if w, ok := netscan.ReadWiFi(ctx, c.Platform); ok {
+		inv.WiFi = &protocol.WiFiInfo{Interface: w.Interface, SSID: w.SSID, BSSID: w.BSSID}
 	}
 
 	if u, err := c.Platform.ConsoleUser(ctx); err == nil {

@@ -144,7 +144,7 @@ public sealed class TestAgent : IAsyncDisposable
             await SendAsync("hello", new
             {
                 agentVersion = "0.1.0-test", protocolVersion = 1, os = Os, arch = "amd64", hostname = Hostname,
-                capabilities = capabilities ?? new[] { "script", "inventory.refresh", "software.scan", "software.install", "software.uninstall", "package.install", "package.uninstall", "patch.scan", "patch.install", "posture.scan", "policy.evaluate", "reboot", "file.list", "file.read", "file.write", "mesh.install", "agent.configure", "agent.uninstall", "session.terminal", "session.files", "session.desktop" },
+                capabilities = capabilities ?? new[] { "script", "inventory.refresh", "software.scan", "software.install", "software.uninstall", "package.install", "package.uninstall", "patch.scan", "patch.install", "posture.scan", "policy.evaluate", "reboot", "file.list", "file.read", "file.write", "mesh.install", "agent.configure", "agent.uninstall", "network.scan", "session.terminal", "session.files", "session.desktop" },
                 trustKeyIds = new[] { _fx.Service<ICommandSigner>().KeyId },
             });
             await WaitForAsync("hello.ack");

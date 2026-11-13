@@ -518,6 +518,9 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.Property<double?>("CpuPercent")
                         .HasColumnType("double precision");
 
+                    b.Property<string>("DefaultGateway")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("EnrolledAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -545,6 +548,10 @@ namespace Dranzo.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset?>("LastSeenAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<string[]>("MacAddresses")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<string>("MachineId")
                         .IsRequired()
@@ -613,11 +620,18 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.Property<bool>("UninstallCodeSet")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("WifiSsid")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CertThumbprint");
 
                     b.HasIndex("IsOnline");
+
+                    b.HasIndex("MacAddresses");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("MacAddresses"), "gin");
 
                     b.HasIndex("PrevCertThumbprint");
 
@@ -1169,6 +1183,77 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.HasIndex("DeviceId", "Status");
 
                     b.ToTable("JobRuns");
+                });
+
+            modelBuilder.Entity("Dranzo.Domain.NetworkDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Hostname")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Ip")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsGateway")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Mac")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ManagedDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Randomized")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("SeenByDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("StatusChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StatusChangedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Vendor")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Status");
+
+                    b.HasIndex("SiteId", "Mac")
+                        .IsUnique();
+
+                    b.ToTable("NetworkDevices");
                 });
 
             modelBuilder.Entity("Dranzo.Domain.NotificationChannel", b =>

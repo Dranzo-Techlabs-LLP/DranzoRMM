@@ -186,6 +186,41 @@ public class Device : IOrgOwned
     public string? FailedUpdateVersion { get; set; }
     public DateTimeOffset? LastPatchScanAt { get; set; }
     public DateTimeOffset? LastPatchInstallAt { get; set; }
+    /// <summary>MAC addresses from the latest inventory (lowercase, colon-separated), to match discovered network devices.</summary>
+    public string[] MacAddresses { get; set; } = [];
+    public string? DefaultGateway { get; set; }
+    /// <summary>SSID of the Wi-Fi the device is on; "" when the OS hides it, null when not on Wi-Fi.</summary>
+    public string? WifiSsid { get; set; }
+}
+
+// ---------- Network ----------
+
+public enum NetworkDeviceStatus { Unknown, Approved, Blocked }
+
+/// <summary>A device seen on a site's local network by a network.scan (or a network controller).</summary>
+public class NetworkDevice : IOrgOwned
+{
+    public Guid Id { get; set; }
+    public Guid PartnerId { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid SiteId { get; set; }
+    /// <summary>Lowercase, colon-separated.</summary>
+    public required string Mac { get; set; }
+    public string Ip { get; set; } = "";
+    public string? Hostname { get; set; }
+    public string? Vendor { get; set; }
+    /// <summary>Locally administered (private Wi-Fi) MAC: the same phone may appear under several.</summary>
+    public bool Randomized { get; set; }
+    public bool IsGateway { get; set; }
+    public DateTimeOffset FirstSeenAt { get; set; }
+    public DateTimeOffset LastSeenAt { get; set; }
+    public Guid? SeenByDeviceId { get; set; }
+    /// <summary>The enrolled device with this MAC, if any.</summary>
+    public Guid? ManagedDeviceId { get; set; }
+    public NetworkDeviceStatus Status { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset? StatusChangedAt { get; set; }
+    public string? StatusChangedBy { get; set; }
 }
 
 public class InventorySnapshot : IDeviceOwned
@@ -754,4 +789,5 @@ public static class JobKinds
     public const string MeshUninstall = "mesh.uninstall";
     public const string AgentConfigure = "agent.configure";
     public const string AgentUninstall = "agent.uninstall";
+    public const string NetworkScan = "network.scan";
 }

@@ -1,0 +1,15 @@
+There is 1 interface on the system:
+
+    Name                   : Wi-Fi
+    Description            : Intel(R) Wi-Fi 6E AX211 160MHz
+    GUID                   : 0b1c
+    Physical address       : 04:d9:f5:0a:0b:0c
+    Interface type         : Primary
+    State                  : connected
+    SSID                   : Dranzo-Office
+    AP BSSID               : a4:83:e7:11:22:40
+    Band                   : 5 GHz
+    Radio type             : 802.11ax
+    Authentication         : WPA2-Personal
+
+    Hosted network status  : Not available

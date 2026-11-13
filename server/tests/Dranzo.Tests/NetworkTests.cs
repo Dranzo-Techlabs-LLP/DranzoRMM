@@ -160,4 +160,135 @@ public class NetworkTests(ServerFixture fx)
         var viewer = await fx.CreateUserAsync($"scoreview-{U}@example.test", BuiltInRoles.OrganizationViewer, ScopeType.Organization, other.OrgId);
         Assert.Equal(HttpStatusCode.NotFound, (await viewer.GetAsync($"/api/v1/devices/{agent.DeviceId}/security-score")).StatusCode);
     }
+
+    // ----- 10c: network discovery and approval list -----
+
+    [Fact]
+    public void Network_rules_accept_only_clean_unicast_private_input()
+    {
+        Assert.Equal("a4:83:e7:11:22:33", NetworkRules.NormalizeMac("A4-83-E7-11-22-33"));
+        Assert.Null(NetworkRules.NormalizeMac("ff:ff:ff:ff:ff:ff"));
+        Assert.Null(NetworkRules.NormalizeMac("01:00:5e:00:00:fb"));
+        Assert.Null(NetworkRules.NormalizeMac("00:00:00:00:00:00"));
+        Assert.Null(NetworkRules.NormalizeMac("a4:83:e7:11:22"));
+        Assert.True(NetworkRules.Randomized("da:a1:19:22:33:44"));
+        Assert.True(NetworkRules.IsPrivateIpv4("192.168.68.1"));
+        Assert.True(NetworkRules.IsPrivateIpv4("100.64.1.1"));
+        Assert.False(NetworkRules.IsPrivateIpv4("8.8.8.8"));
+        Assert.False(NetworkRules.IsPrivateIpv4("192.168.1"));
+        Assert.Equal("router.lan", NetworkRules.CleanHostname("router.lan."));
+        Assert.Null(NetworkRules.CleanHostname("<script>"));
+    }
+
+    private static object Neighbor(string ip, string mac, string? hostname = null) => new { ip, mac, hostname };
+
+    [Fact]
+    public async Task Network_scan_records_devices_matches_managed_ones_alerts_and_supports_approval()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Net " + U);
+        await using var scanner = await TestAgent.EnrollAsync(fx, org.Token, "net-scanner", os: "windows");
+        await using var laptop = await TestAgent.EnrollAsync(fx, org.Token, "net-laptop", os: "macos");
+        // The laptop reports its MAC in inventory, so the scan recognises it as managed.
+        await laptop.SendAsync("inventory", new
+        {
+            collectedAt = DateTimeOffset.UtcNow, hostname = "net-laptop", os = new { family = "macos", name = "macOS", version = "15", build = "", kernel = "" },
+            arch = "arm64", network = new[] { new { name = "en0", mac = "3C:22:FB:00:11:22", ipv4 = new[] { "192.168.68.50" }, ipv6 = Array.Empty<string>() } },
+            defaultGateway = "192.168.68.1", wifi = new { @interface = "en0", ssid = "Dranzo-Office", bssid = "" },
+        });
+        await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{laptop.DeviceId}"), d => d.GetProperty("osName").GetString() == "macOS");
+
+        // A site scan goes to the most recently seen capable device: here the laptop, which just reported.
+        var bySite = await admin.PostJsonAsync("/api/v1/network/scan", new { siteId = org.SiteId });
+        Assert.Equal(laptop.DeviceId, bySite.GetProperty("deviceId").GetGuid());
+        await laptop.CompleteAsync(await laptop.NextJobAsync("network.scan"), result: new { neighbors = Array.Empty<object>() });
+        await admin.PostJsonAsync("/api/v1/network/scan", new { deviceId = scanner.DeviceId });
+        var job = await scanner.NextJobAsync("network.scan");
+        Assert.True(job.Payload.GetProperty("spec").GetProperty("resolveNames").GetBoolean());
+        await scanner.CompleteAsync(job, result: new
+        {
+            scannedAt = DateTimeOffset.UtcNow, subnets = new[] { "192.168.68.0/24" }, gateway = "192.168.68.1", truncated = false,
+            neighbors = new[]
+            {
+                Neighbor("192.168.68.1", "a4:83:e7:11:22:33", "router.lan"),
+                Neighbor("192.168.68.50", "3c:22:fb:00:11:22"),
+                Neighbor("192.168.68.77", "da:a1:19:22:33:44"),
+                Neighbor("192.168.68.80", "00:11:22:33:44:55", "<b>evil</b>"),
+                Neighbor("8.8.8.8", "00:11:22:33:44:66"),            // public: dropped
+                Neighbor("192.168.68.255", "ff:ff:ff:ff:ff:ff"),     // broadcast: dropped
+            },
+        });
+        var list = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}"), l => l.GetProperty("total").GetInt32() == 4);
+        var items = list.GetProperty("items").EnumerateArray().ToDictionary(i => i.GetProperty("mac").GetString()!);
+        Assert.True(items["a4:83:e7:11:22:33"].GetProperty("isGateway").GetBoolean());
+        Assert.Equal("router.lan", items["a4:83:e7:11:22:33"].GetProperty("hostname").GetString());
+        Assert.Equal("net-laptop", items["3c:22:fb:00:11:22"].GetProperty("managedHostname").GetString());
+        Assert.True(items["da:a1:19:22:33:44"].GetProperty("randomized").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, items["00:11:22:33:44:55"].GetProperty("hostname").ValueKind);
+        Assert.Equal("net-scanner", items["00:11:22:33:44:55"].GetProperty("seenByHostname").GetString());
+        Assert.Equal(4, list.GetProperty("counts").GetProperty("unknown").GetInt32());
+
+        // First scan of a site: one summary alert, not one per device.
+        var alerts = await admin.GetJsonAsync($"/api/v1/alerts?deviceId={scanner.DeviceId}");
+        var networkAlerts = alerts.GetProperty("items").EnumerateArray().Where(a => a.GetProperty("type").GetString() == "network.unknown_device").ToList();
+        Assert.Single(networkAlerts);
+        Assert.Contains("First network scan: 2 unknown devices", networkAlerts[0].GetProperty("title").GetString(), StringComparison.Ordinal);
+
+        // A later scan with a new device raises an alert for it.
+        await admin.PostJsonAsync("/api/v1/network/scan", new { deviceId = scanner.DeviceId });
+        var job2 = await scanner.NextJobAsync("network.scan");
+        await scanner.CompleteAsync(job2, result: new
+        {
+            scannedAt = DateTimeOffset.UtcNow, subnets = new[] { "192.168.68.0/24" }, gateway = "192.168.68.1", truncated = false,
+            neighbors = new[] { Neighbor("192.168.68.1", "a4:83:e7:11:22:33"), Neighbor("192.168.68.90", "00:aa:bb:cc:dd:ee", "printer.lan") },
+        });
+        await UntilAsync(() => admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}"), l => l.GetProperty("total").GetInt32() == 5);
+        alerts = await admin.GetJsonAsync($"/api/v1/alerts?deviceId={scanner.DeviceId}");
+        Assert.Contains(alerts.GetProperty("items").EnumerateArray(), a => a.GetProperty("title").GetString() == "New device on the network: printer.lan (192.168.68.90)");
+        // The router kept its hostname although the second scan did not resolve it.
+        list = await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}&search=router");
+        Assert.Equal(1, list.GetProperty("total").GetInt32());
+
+        // Approve and block, audited.
+        var printer = (await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}&search=printer")).GetProperty("items")[0].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/v1/network/devices/{printer}/status", new { status = "approved", note = "Office printer" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsync($"/api/v1/network/devices/{printer}/status", new { status = "trusted" })).StatusCode);
+        var all = (await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}&status=unknown")).GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToArray();
+        var bulk = await admin.PostJsonAsync("/api/v1/network/devices/status", new { ids = all, status = "blocked" });
+        Assert.Equal(all.Length, bulk.GetProperty("updated").GetInt32());
+        list = await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}");
+        Assert.Equal(1, list.GetProperty("counts").GetProperty("approved").GetInt32());
+        Assert.Equal(4, list.GetProperty("counts").GetProperty("blocked").GetInt32());
+        var audit = await admin.GetJsonAsync($"/api/v1/audit?action=network_device.status&organizationId={org.OrgId}");
+        Assert.True(audit.GetProperty("total").GetInt32() >= 2);
+
+        // Another organization: cannot see, change or scan.
+        var other = await fx.SeedOrgAsync("Net other " + U);
+        var outsider = await fx.CreateUserAsync($"netout-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, other.OrgId);
+        Assert.Equal(0, (await outsider.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}")).GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.PostAsync($"/api/v1/network/devices/{printer}/status", new { status = "blocked" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.PostAsync("/api/v1/network/devices/status", new { ids = new[] { printer }, status = "blocked" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.PostAsync("/api/v1/network/scan", new { siteId = org.SiteId })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.DeleteAsync($"/api/v1/network/devices/{printer}")).StatusCode);
+        // A read-only organization viewer of the right organization cannot change anything.
+        var viewer = await fx.CreateUserAsync($"netview-{U}@example.test", BuiltInRoles.ReadOnly, ScopeType.Organization, org.OrgId);
+        Assert.Equal(1, (await viewer.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}&status=approved")).GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsync($"/api/v1/network/devices/{printer}/status", new { status = "blocked" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Scan_results_from_the_wrong_device_or_kind_are_ignored()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Net forge " + U);
+        await using var scanner = await TestAgent.EnrollAsync(fx, org.Token, "forge-scanner");
+        await using var forger = await TestAgent.EnrollAsync(fx, org.Token, "forge-other");
+        await admin.PostJsonAsync("/api/v1/network/scan", new { deviceId = scanner.DeviceId });
+        var job = await scanner.NextJobAsync("network.scan");
+        // Another device answers the scanner's job run: refused by the result processor.
+        await forger.CompleteAsync(job, result: new { neighbors = new[] { Neighbor("192.168.1.66", "00:66:66:66:66:66") } });
+        await scanner.CompleteAsync(job, status: "failed", result: new { neighbors = new[] { Neighbor("192.168.1.67", "00:66:66:66:66:67") } });
+        await Task.Delay(500);
+        Assert.Equal(0, (await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}")).GetProperty("total").GetInt32());
+    }
 }

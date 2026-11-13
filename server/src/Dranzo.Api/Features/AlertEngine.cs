@@ -21,8 +21,12 @@ public static class AlertTypes
     public const string AgentTamper = "agent.tamper";
     public const string ComplianceDrift = "compliance.drift";
     public const string KnownExploited = "vulnerability.known_exploited";
+    public const string NetworkUnknownDevice = "network.unknown_device";
 
-    public static readonly string[] All = [DeviceOffline, DiskUsage, AntivirusOff, FirewallOff, EncryptionOff, PatchFailed, LocalAdminNew, AgentTamper, ComplianceDrift, KnownExploited];
+    public static readonly string[] All = [DeviceOffline, DiskUsage, AntivirusOff, FirewallOff, EncryptionOff, PatchFailed, LocalAdminNew, AgentTamper, ComplianceDrift, KnownExploited, NetworkUnknownDevice];
+
+    /// <summary>Default rule types added after the first release; Bootstrap adds them to partners that have none.</summary>
+    public static readonly string[] AddedLater = [NetworkUnknownDevice];
     public static readonly string[] Severities = ["info", "warning", "critical"];
 
     /// <summary>Rules created for a new partner so alerting works out of the box.</summary>
@@ -38,6 +42,7 @@ public static class AlertTypes
         Rule("Agent tampering or uninstall", AgentTamper, "critical", "{}"),
         Rule("Compliance drift", ComplianceDrift, "warning", "{}"),
         Rule("Known exploited vulnerability present", KnownExploited, "critical", "{}"),
+        Rule("Unknown device on the network", NetworkUnknownDevice, "warning", "{}"),
     ];
 
     private static AlertRule Rule(string name, string type, string severity, string json) =>

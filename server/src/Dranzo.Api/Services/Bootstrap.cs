@@ -49,6 +49,11 @@ public static class Bootstrap
         foreach (var partnerId in await db.Partners.Select(p => p.Id).ToListAsync())
         {
             await EnsureRolesAsync(db, partnerId);
+            // Default alert rules for types added after the partner was created (disable a rule rather than delete it,
+            // or it is added again at the next start).
+            var types = await db.AlertRules.Where(r => r.PartnerId == partnerId).Select(r => r.Type).Distinct().ToListAsync();
+            db.AlertRules.AddRange(Dranzo.Api.Features.AlertTypes.DefaultsFor(partnerId, now)
+                .Where(r => Dranzo.Api.Features.AlertTypes.AddedLater.Contains(r.Type) && !types.Contains(r.Type)));
         }
         await db.SaveChangesAsync();
     }

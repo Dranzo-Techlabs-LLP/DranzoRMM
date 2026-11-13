@@ -216,6 +216,7 @@ Concurrency: the agent runs at most 4 jobs at a time (configurable); others are 
 | `mesh.install` / `mesh.uninstall` | `{blobId, sha256, sizeBytes, fileName}` / `{}` | `{installed: bool, meshNodeId?}` |
 | `agent.configure` | `{uninstallCode?: {salt: base64, iterations: int, hash: base64} \| null}` (PBKDF2-HMAC-SHA256 of the technician-set uninstall code; `null` clears it) | none |
 | `agent.uninstall` | `{}` | none (agent acks, then removes itself) |
+| `network.scan` | `{resolveNames: bool}` | `{scannedAt, subnets: string[], gateway, neighbors: [{ip, mac, hostname?, gateway?, randomized?}], truncated}` |
 
 `Detection`: `{type: "file"\|"registry"\|"pkgutil"\|"dpkg"\|"rpm"\|"winget"\|"brew"\|"app", key, valueName?, minVersion?}`.
 
@@ -228,6 +229,7 @@ Rules:
 - `packageId`, `version`, `updateIds` must match `^[A-Za-z0-9][A-Za-z0-9+._:@/-]{0,199}$`; anything else ⇒ `rejected`.
 - File jobs must carry the `sessionId` of an **active** `files` session, otherwise `rejected`.
 - A kind the OS cannot do returns `unsupported` with a clear message.
+- `network.scan`: the agent scans the IPv4 subnets of at most 2 active, non-loopback interfaces, each limited to the /22 (1024 addresses) around its own address. It wakes the neighbor cache with short TCP connects (ports 445, 80, 22; 300 ms timeout; at most 64 at a time; no raw sockets, no port scan report), then reads the OS neighbor table (Windows `Get-NetNeighbor`, macOS `arp -an`, Linux `/proc/net/arp`). Only entries inside the scanned subnets with a usable unicast MAC are reported, at most 1024 (`truncated` beyond). `randomized` marks a locally administered (private) MAC. Hostnames come from reverse DNS when `resolveNames` is true.
 
 Built-in policy checks (`policy.evaluate.check`): `firewall.enabled`, `antivirus.enabled`, `screenlock.timeout` (`params.maxSeconds`), `localadmins.allowed` (`params.allowed: string[]`), `usb.storage.blocked` (Windows), `password.policy` (Windows; `params.minLength`, `maxAgeDays`, `complexity`), `diskencryption.enabled` (report only: `remediate` is ignored), `script` (`params.checkScript`, `params.remediationScript`, `params.language`: check is compliant on exit code 0).
 
@@ -296,6 +298,8 @@ All sub-collectors report what they can. A sub-section the OS cannot provide is 
   "memoryBytes": 0,
   "disks": [{"device": "", "mountPoint": "", "fsType": "", "totalBytes": 0, "freeBytes": 0}],
   "network": [{"name": "", "mac": "", "ipv4": [], "ipv6": []}],
+  "defaultGateway": "192.168.1.1",
+  "wifi": {"interface": "", "ssid": "", "bssid": ""},
   "serial": "", "manufacturer": "", "model": "",
   "consoleUser": "", "loggedInUsers": [],
   "bootTime": "...", "uptimeSeconds": 0, "pendingReboot": false, "timezone": "",
@@ -303,6 +307,8 @@ All sub-collectors report what they can. A sub-section the OS cannot provide is 
   "unsupported": []
 }
 ```
+
+`defaultGateway` (IPv4, optional) and `wifi` (null when not on Wi-Fi or not readable) were added in Phase 10. The SSID is best effort: Windows 11 24H2+ and macOS 14+ hide it from services without location permission; a hidden SSID is reported as `""`.
 
 ### 7.2 `software.inventory`
 

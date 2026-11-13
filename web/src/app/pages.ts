@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ListChecks,
   MonitorSmartphone,
+  Network,
   PackageOpen,
   Rocket,
   ScrollText,
@@ -180,6 +181,20 @@ export const NAV_AREAS: NavArea[] = [
         permission: P.alertsRead,
         load: () => import('@/features/alerts/AlertsPage'),
         badge: OpenAlertsBadge,
+      },
+    ],
+  },
+  {
+    id: 'network',
+    label: 'Network',
+    pages: [
+      {
+        id: 'network-devices',
+        path: 'network/devices',
+        label: 'Network devices',
+        icon: Network,
+        permission: P.networkRead,
+        load: () => import('@/features/network/NetworkDevicesPage'),
       },
     ],
   },

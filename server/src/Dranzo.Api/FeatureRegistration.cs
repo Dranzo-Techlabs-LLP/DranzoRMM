@@ -48,6 +48,9 @@ public static class FeatureRegistration
         services.AddScoped<UpdateRollout>();
         services.AddScoped<IAgentMessageProcessor, UpdateStatusProcessor>();
         services.AddScoped<IJobResultHandler, AgentUninstallResultHandler>();
+
+        // Phase 10: network and firewall
+        services.AddScoped<IJobResultHandler, NetworkScanResultHandler>();
     }
 
     /// <summary>The dispatcher is required for jobs to flow at all; periodic monitors can be switched off in tests.</summary>
@@ -88,5 +91,6 @@ public static class FeatureRegistration
         ApiKeyEndpoints.Map(api);
         ReportEndpoints.Map(api);
         AccessReviewEndpoints.Map(api);
+        NetworkEndpoints.Map(api);
     }
 }

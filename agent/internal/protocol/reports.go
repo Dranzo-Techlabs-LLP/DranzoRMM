@@ -37,6 +37,13 @@ type NetworkInterface struct {
 	IPv6 []string `json:"ipv6"`
 }
 
+// WiFiInfo is the active Wi-Fi connection. SSID is "" when the OS hides it.
+type WiFiInfo struct {
+	Interface string `json:"interface"`
+	SSID      string `json:"ssid"`
+	BSSID     string `json:"bssid"`
+}
+
 // AgentStats are the agent's own resource statistics.
 type AgentStats struct {
 	Version    string  `json:"version"`
@@ -47,26 +54,30 @@ type AgentStats struct {
 // Inventory is the payload of the "inventory" message. A sub-section the OS
 // cannot provide is null and its name is listed in Unsupported.
 type Inventory struct {
-	CollectedAt   time.Time          `json:"collectedAt"`
-	Hostname      string             `json:"hostname"`
-	MachineID     string             `json:"machineId"`
-	OS            *OSInfo            `json:"os"`
-	Arch          string             `json:"arch"`
-	CPU           *CPUInfo           `json:"cpu"`
-	MemoryBytes   uint64             `json:"memoryBytes"`
-	Disks         []DiskInfo         `json:"disks"`
-	Network       []NetworkInterface `json:"network"`
-	Serial        string             `json:"serial"`
-	Manufacturer  string             `json:"manufacturer"`
-	Model         string             `json:"model"`
-	ConsoleUser   string             `json:"consoleUser"`
-	LoggedInUsers []string           `json:"loggedInUsers"`
-	BootTime      *time.Time         `json:"bootTime"`
-	UptimeSeconds uint64             `json:"uptimeSeconds"`
-	PendingReboot bool               `json:"pendingReboot"`
-	Timezone      string             `json:"timezone"`
-	Agent         *AgentStats        `json:"agent"`
-	Unsupported   []string           `json:"unsupported"`
+	CollectedAt time.Time          `json:"collectedAt"`
+	Hostname    string             `json:"hostname"`
+	MachineID   string             `json:"machineId"`
+	OS          *OSInfo            `json:"os"`
+	Arch        string             `json:"arch"`
+	CPU         *CPUInfo           `json:"cpu"`
+	MemoryBytes uint64             `json:"memoryBytes"`
+	Disks       []DiskInfo         `json:"disks"`
+	Network     []NetworkInterface `json:"network"`
+	// DefaultGateway is the IPv4 default gateway ("" when unknown).
+	DefaultGateway string `json:"defaultGateway,omitempty"`
+	// WiFi is the active Wi-Fi connection (nil when not on Wi-Fi or unreadable).
+	WiFi          *WiFiInfo   `json:"wifi"`
+	Serial        string      `json:"serial"`
+	Manufacturer  string      `json:"manufacturer"`
+	Model         string      `json:"model"`
+	ConsoleUser   string      `json:"consoleUser"`
+	LoggedInUsers []string    `json:"loggedInUsers"`
+	BootTime      *time.Time  `json:"bootTime"`
+	UptimeSeconds uint64      `json:"uptimeSeconds"`
+	PendingReboot bool        `json:"pendingReboot"`
+	Timezone      string      `json:"timezone"`
+	Agent         *AgentStats `json:"agent"`
+	Unsupported   []string    `json:"unsupported"`
 }
 
 // ---- 7.2 software.inventory ----

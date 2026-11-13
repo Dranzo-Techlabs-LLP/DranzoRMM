@@ -272,6 +272,7 @@ public sealed class Scheduler(IServiceScopeFactory scopes, ILogger<Scheduler> lo
         JobKinds.Script => Permissions.ScriptsRun,
         JobKinds.PatchInstall or JobKinds.PatchScan => Permissions.PatchesInstall,
         JobKinds.SoftwareInstall or JobKinds.SoftwareUninstall or JobKinds.PackageInstall or JobKinds.PackageUninstall => Permissions.SoftwareDeploy,
+        JobKinds.NetworkScan => Permissions.NetworkManage,
         _ => Permissions.DevicesManage,
     };
 

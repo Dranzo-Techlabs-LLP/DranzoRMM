@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import { visibleNav } from '@/app/pages';
+import { accessFor } from '@/lib/auth/permissions';
 import { groupPermissions, permissionLabel } from '@/features/admin/permission-catalog';
 import { principalStatus, reviewSummary } from '@/features/admin/access/review';
 import { describeScope } from '@/features/admin/scope';
 import { formatAuditDetail, resultTone } from '@/features/audit/detail';
 import { readDeviceFilters, toApiFilter, writeDeviceFilters } from '@/features/devices/filters';
 import { installCommands, tokenState } from '@/features/enrollment/tokens';
+import { deviceKind, displayName } from '@/features/network/model';
 import { timeZoneOptions } from '@/features/organizations/timezones';
 import { matchesPostureFilter, scoreTone } from '@/features/security/posture-model';
 import { countDevices, summarizeByOrganization } from '@/features/overview/fleet';
 import { auditApi, type DeviceListItem, type EnrollmentToken, type InstallInfo, type Organization } from '@/lib/api';
 import type { AccessPrincipal } from '@/lib/api/access';
+import type { NetworkDevice } from '@/lib/api/network';
 import type { PostureRow } from '@/lib/api/security';
 import { formatBytes, formatDuration, formatRelative, localInputToIso } from '@/lib/format';
 
@@ -297,5 +301,50 @@ describe('security score display', () => {
     expect(matchesPostureFilter(row, 'low-score')).toBe(true);
     expect(matchesPostureFilter({ ...row, score: 60 }, 'low-score')).toBe(false);
     expect(matchesPostureFilter({ ...row, score: null }, 'low-score')).toBe(false);
+  });
+});
+
+describe('network devices', () => {
+  const d: NetworkDevice = {
+    id: '1',
+    organizationId: 'o',
+    siteId: 's',
+    siteName: 'HQ',
+    mac: 'a4:83:e7:11:22:33',
+    ip: '192.168.1.10',
+    hostname: null,
+    vendor: null,
+    randomized: false,
+    isGateway: false,
+    firstSeenAt: '2026-11-13T00:00:00Z',
+    lastSeenAt: '2026-11-13T00:00:00Z',
+    status: 'unknown',
+    note: null,
+    statusChangedAt: null,
+    statusChangedBy: null,
+    managedDeviceId: null,
+    managedHostname: null,
+    seenByDeviceId: null,
+    seenByHostname: null,
+  };
+
+  it('names a device by managed hostname, then DNS name, then MAC', () => {
+    expect(displayName(d)).toBe('a4:83:e7:11:22:33');
+    expect(displayName({ ...d, hostname: 'printer.lan' })).toBe('printer.lan');
+    expect(displayName({ ...d, hostname: 'x', managedHostname: 'LAPTOP-1' })).toBe('LAPTOP-1');
+  });
+
+  it('describes what a device probably is', () => {
+    expect(deviceKind({ ...d, isGateway: true })).toBe('Router / gateway');
+    expect(deviceKind({ ...d, managedDeviceId: 'm' })).toBe('Managed by DranzoRMM');
+    expect(deviceKind({ ...d, randomized: true })).toBe('Private address (phone or laptop)');
+    expect(deviceKind(d)).toBe('Unknown device');
+  });
+
+  it('shows the Network area only with network.read', () => {
+    const labels = (perms: string[]) =>
+      visibleNav(accessFor({ permissions: perms, partnerWide: false })).flatMap((a) => a.pages.map((p) => p.label));
+    expect(labels(['network.read'])).toContain('Network devices');
+    expect(labels(['devices.read'])).not.toContain('Network devices');
   });
 });
