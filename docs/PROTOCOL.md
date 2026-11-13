@@ -216,6 +216,8 @@ Concurrency: the agent runs at most 4 jobs at a time (configurable); others are 
 | `mesh.install` / `mesh.uninstall` | `{blobId, sha256, sizeBytes, fileName}` / `{}` | `{installed: bool, meshNodeId?}` |
 | `agent.configure` | `{uninstallCode?: {salt: base64, iterations: int, hash: base64} \| null}` (PBKDF2-HMAC-SHA256 of the technician-set uninstall code; `null` clears it) | none |
 | `agent.uninstall` | `{}` | none (agent acks, then removes itself) |
+| `network.isolate` | `{allow: [{host, port}] (extra endpoints to keep, e.g. MeshCentral), message}` | `{allowed: string[] (resolved IPs)}` |
+| `network.release` | `{message}` | none |
 | `network.scan` | `{resolveNames: bool}` | `{scannedAt, subnets: string[], gateway, neighbors: [{ip, mac, hostname?, gateway?, randomized?}], truncated}` |
 
 `Detection`: `{type: "file"\|"registry"\|"pkgutil"\|"dpkg"\|"rpm"\|"winget"\|"brew"\|"app", key, valueName?, minVersion?}`.
@@ -229,6 +231,7 @@ Rules:
 - `packageId`, `version`, `updateIds` must match `^[A-Za-z0-9][A-Za-z0-9+._:@/-]{0,199}$`; anything else ⇒ `rejected`.
 - File jobs must carry the `sessionId` of an **active** `files` session, otherwise `rejected`.
 - A kind the OS cannot do returns `unsupported` with a clear message.
+- `network.isolate`: the agent cuts the device off the network except: loopback, DHCP, DNS (port 53), the DranzoRMM server (its host resolved now; IPs pinned for the isolation) and the `allow` endpoints. Windows: block rules in Windows Firewall group `DranzoRMM Isolation` whose remote addresses are every address except the allowed ones (block rules win over allow rules), plus the DNS servers and default gateway kept reachable for DHCP/DNS; Linux: nftables table `inet dranzormm_isolation` with `policy drop` chains; macOS: pf anchor `com.apple/251.DranzoRMMIsolation`. The agent then opens a new connection to the server; if that fails within 30 s it releases the isolation again and reports `failed`. The state is kept in the data directory and re-applied when the agent starts (nftables and pf rules do not survive a reboot). The person at the computer sees a notice. A local administrator can always run `dranzo-agent release-isolation`; uninstall also releases it.
 - `network.scan`: the agent scans the IPv4 subnets of at most 2 active, non-loopback interfaces, each limited to the /22 (1024 addresses) around its own address. It wakes the neighbor cache with short TCP connects (ports 445, 80, 22; 300 ms timeout; at most 64 at a time; no raw sockets, no port scan report), then reads the OS neighbor table (Windows `Get-NetNeighbor`, macOS `arp -an`, Linux `/proc/net/arp`). Only entries inside the scanned subnets with a usable unicast MAC are reported, at most 1024 (`truncated` beyond). `randomized` marks a locally administered (private) MAC. Hostnames come from reverse DNS when `resolveNames` is true.
 
 Built-in policy checks (`policy.evaluate.check`): `firewall.enabled`, `antivirus.enabled`, `screenlock.timeout` (`params.maxSeconds`), `localadmins.allowed` (`params.allowed: string[]`), `usb.storage.blocked` (Windows), `password.policy` (Windows; `params.minLength`, `maxAgeDays`, `complexity`), `diskencryption.enabled` (report only: `remediate` is ignored), `script` (`params.checkScript`, `params.remediationScript`, `params.language`: check is compliant on exit code 0).

@@ -334,4 +334,67 @@ public class NetworkTests(ServerFixture fx)
         var compliance = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{win.DeviceId}/compliance"), c => c.GetArrayLength() == 1);
         Assert.True(compliance[0].GetProperty("compliant").GetBoolean());
     }
+
+    // ----- 10e: device isolation -----
+
+    [Fact]
+    public async Task Isolation_needs_step_up_is_audited_tracked_and_released()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Iso " + U);
+        await using var pc = await TestAgent.EnrollAsync(fx, org.Token, "iso-pc", os: "windows");
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await StepUpThen(admin, () => admin.PostAsync($"/api/v1/devices/{pc.DeviceId}/isolate", new { reason = "" }))).StatusCode);
+        var isolate = await StepUpThen(admin, () => admin.PostAsync($"/api/v1/devices/{pc.DeviceId}/isolate", new { reason = "Ransomware alert INC-42", message = "Call IT on 1234." }));
+        Assert.Equal(HttpStatusCode.Created, isolate.StatusCode);
+        var job = await pc.NextJobAsync("network.isolate");
+        var spec = job.Payload.GetProperty("spec");
+        Assert.Equal("Call IT on 1234.", spec.GetProperty("message").GetString());
+        await pc.CompleteAsync(job, result: new { allowed = new[] { "127.0.0.1" } });
+        var detail = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{pc.DeviceId}"), d => d.GetProperty("isolatedAt").ValueKind == JsonValueKind.String);
+        Assert.Equal("Ransomware alert INC-42", detail.GetProperty("isolationReason").GetString());
+        Assert.False(string.IsNullOrEmpty(detail.GetProperty("isolatedBy").GetString()));
+        Assert.True((await admin.GetJsonAsync($"/api/v1/devices/{pc.DeviceId}/security-score")).GetProperty("isolated").GetBoolean());
+        var audit = await admin.GetJsonAsync($"/api/v1/audit?action=device.isolate&organizationId={org.OrgId}");
+        Assert.Equal(1, audit.GetProperty("total").GetInt32());
+
+        var release = await StepUpThen(admin, () => admin.PostAsync($"/api/v1/devices/{pc.DeviceId}/release", new { reason = "Cleaned" }));
+        Assert.Equal(HttpStatusCode.Created, release.StatusCode);
+        var rjob = await pc.NextJobAsync("network.release");
+        await pc.CompleteAsync(rjob);
+        await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{pc.DeviceId}"), d => d.GetProperty("isolatedAt").ValueKind == JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Isolation_is_refused_without_rights_fresh_mfa_or_scope()
+    {
+        var org = await fx.SeedOrgAsync("Iso deny " + U);
+        await using var pc = await TestAgent.EnrollAsync(fx, org.Token, "iso-deny");
+        // A failed isolation on the device leaves the device not isolated.
+        var admin = await fx.AdminAsync();
+        await StepUpThen(admin, () => admin.PostAsync($"/api/v1/devices/{pc.DeviceId}/isolate", new { reason = "test" }));
+        await pc.CompleteAsync(await pc.NextJobAsync("network.isolate"), status: "failed", message: "server unreachable, released");
+        await Task.Delay(300);
+        Assert.Equal(JsonValueKind.Null, (await admin.GetJsonAsync($"/api/v1/devices/{pc.DeviceId}")).GetProperty("isolatedAt").ValueKind);
+
+        // Technicians do not hold devices.isolate.
+        var tech = await fx.CreateUserAsync($"isotech-{U}@example.test", BuiltInRoles.Technician, ScopeType.Organization, org.OrgId);
+        Assert.Equal(HttpStatusCode.Forbidden, (await StepUpThen(tech, () => tech.PostAsync($"/api/v1/devices/{pc.DeviceId}/isolate", new { reason = "x" }))).StatusCode);
+        // A Network Admin of the organization needs a fresh authenticator code.
+        var netAdmin = await fx.CreateUserAsync($"isonet-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, org.OrgId);
+        var noStepUp = await netAdmin.PostAsync($"/api/v1/devices/{pc.DeviceId}/isolate", new { reason = "x" });
+        Assert.Equal(HttpStatusCode.Unauthorized, noStepUp.StatusCode);
+        Assert.Contains("step_up_required", await noStepUp.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Created, (await StepUpThen(netAdmin, () => netAdmin.PostAsync($"/api/v1/devices/{pc.DeviceId}/isolate", new { reason = "x" }))).StatusCode);
+        // A Network Admin of another organization gets 404.
+        var other = await fx.SeedOrgAsync("Iso other " + U);
+        var outsider = await fx.CreateUserAsync($"isoout-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, other.OrgId);
+        Assert.Equal(HttpStatusCode.NotFound, (await StepUpThen(outsider, () => outsider.PostAsync($"/api/v1/devices/{pc.DeviceId}/release", new { reason = "x" }))).StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> StepUpThen(ApiClient client, Func<Task<HttpResponseMessage>> call)
+    {
+        await client.StepUpAsync();
+        return await call();
+    }
 }

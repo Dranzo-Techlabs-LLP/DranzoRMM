@@ -537,6 +537,15 @@ namespace Dranzo.Infrastructure.Data.Migrations
                     b.Property<bool>("IsOnline")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTimeOffset?>("IsolatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IsolatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IsolationReason")
+                        .HasColumnType("text");
+
                     b.Property<string>("LastIp")
                         .HasColumnType("text");
 

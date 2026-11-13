@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Power, RotateCw, Trash2 } from 'lucide-react';
+import { KeyRound, Power, RotateCw, ShieldBan, Trash2 } from 'lucide-react';
 import { useState, type SyntheticEvent } from 'react';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Field } from '@/components/field';
@@ -22,6 +22,7 @@ import { devicesApi, errorMessage, isApiError, qk, type DeviceDetail } from '@/l
 import { P } from '@/lib/auth/permissions';
 import { useAccess } from '@/lib/auth/session';
 import { notifyError, notifySuccess } from '@/lib/notify';
+import { IsolationForm } from './IsolationDialog';
 
 const DELAYS = [
   { seconds: 0, label: 'Now' },
@@ -34,11 +35,12 @@ const DELAYS = [
 export function AgentCard({ device }: { device: DeviceDetail }) {
   const access = useAccess();
   const queryClient = useQueryClient();
-  const [dialog, setDialog] = useState<'code' | 'reboot' | 'uninstall' | null>(null);
+  const [dialog, setDialog] = useState<'code' | 'reboot' | 'uninstall' | 'isolate' | null>(null);
   const canManage = access.has(P.devicesManage);
   const canRevoke = access.has(P.devicesRevoke);
+  const canIsolate = access.has(P.devicesIsolate);
   const revoked = device.status === 'revoked';
-  if ((!canManage && !canRevoke) || revoked) {
+  if ((!canManage && !canRevoke && !canIsolate) || revoked) {
     return null;
   }
   const close = () => {
@@ -80,6 +82,19 @@ export function AgentCard({ device }: { device: DeviceDetail }) {
               </Button>
             </>
           ) : null}
+          {canIsolate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className={device.isolatedAt ? undefined : 'text-destructive hover:text-destructive'}
+              onClick={() => {
+                setDialog('isolate');
+              }}
+            >
+              <ShieldBan aria-hidden="true" />
+              {device.isolatedAt ? 'Release isolation' : 'Isolate'}
+            </Button>
+          ) : null}
           {canRevoke ? (
             <Button
               variant="outline"
@@ -104,7 +119,7 @@ export function AgentCard({ device }: { device: DeviceDetail }) {
         </p>
       )}
       <Dialog
-        open={dialog === 'code' || dialog === 'reboot'}
+        open={dialog === 'code' || dialog === 'reboot' || dialog === 'isolate'}
         onOpenChange={(open) => {
           if (!open) {
             close();
@@ -122,6 +137,7 @@ export function AgentCard({ device }: { device: DeviceDetail }) {
             />
           ) : null}
           {dialog === 'reboot' ? <RebootForm device={device} onDone={close} /> : null}
+          {dialog === 'isolate' ? <IsolationForm device={device} onDone={close} /> : null}
         </DialogContent>
       </Dialog>
       <UninstallConfirm device={device} open={dialog === 'uninstall'} onOpenChange={(open) => !open && close()} />

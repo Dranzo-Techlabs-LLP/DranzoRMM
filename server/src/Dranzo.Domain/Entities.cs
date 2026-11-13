@@ -191,6 +191,10 @@ public class Device : IOrgOwned
     public string? DefaultGateway { get; set; }
     /// <summary>SSID of the Wi-Fi the device is on; "" when the OS hides it, null when not on Wi-Fi.</summary>
     public string? WifiSsid { get; set; }
+    /// <summary>Set when a network.isolate job succeeded; cleared by network.release.</summary>
+    public DateTimeOffset? IsolatedAt { get; set; }
+    public string? IsolatedBy { get; set; }
+    public string? IsolationReason { get; set; }
 }
 
 // ---------- Network ----------
@@ -790,4 +794,6 @@ public static class JobKinds
     public const string AgentConfigure = "agent.configure";
     public const string AgentUninstall = "agent.uninstall";
     public const string NetworkScan = "network.scan";
+    public const string NetworkIsolate = "network.isolate";
+    public const string NetworkRelease = "network.release";
 }

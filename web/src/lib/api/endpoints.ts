@@ -120,6 +120,11 @@ export const devicesApi = {
   setUninstallCode: (id: Id, code: string | null) => api.post<{ jobId: Id }>(`/devices/${id}/uninstall-code`, { code }),
   /** Asks the agent to remove itself; the device is revoked once it confirms. Needs step-up. */
   uninstallAgent: (id: Id) => api.post<{ jobId: Id }>(`/devices/${id}/uninstall-agent`),
+  /** Cuts the device off the network except DranzoRMM (and remote desktop). Needs devices.isolate and step-up. */
+  isolate: (id: Id, input: { reason: string; message?: string }) =>
+    api.post<{ jobId: Id }>(`/devices/${id}/isolate`, input),
+  release: (id: Id, input: { reason?: string; message?: string }) =>
+    api.post<{ jobId: Id }>(`/devices/${id}/release`, input),
   reboot: (id: Id, input: { delaySeconds: number; message?: string; notifyUser: boolean }) =>
     api.post<{ jobId: Id }>(`/devices/${id}/reboot`, input),
   overview: (organizationId?: Id, signal?: AbortSignal) =>

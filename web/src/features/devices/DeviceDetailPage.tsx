@@ -6,6 +6,7 @@ import { OsIcon } from '@/components/os';
 import { ErrorState, LoadingRows, PageHeader } from '@/components/page';
 import { RelativeTime } from '@/components/relative-time';
 import { DeviceStatus, InlineAlert, PendingRebootBadge } from '@/components/status';
+import { formatDateTime } from '@/lib/format';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGroups, useSites } from '@/features/tenants/queries';
 import { devicesApi, qk, type DeviceDetail } from '@/lib/api';
@@ -98,6 +99,20 @@ function DeviceView({ device }: { device: DeviceDetail }) {
         <HeaderFact label="Restart">
           {device.pendingReboot ? <PendingRebootBadge /> : <span className="text-muted-foreground">Not needed</span>}
         </HeaderFact>
+        {device.defaultGateway || device.wifiSsid !== undefined ? (
+          <HeaderFact label="Network">
+            {[
+              device.wifiSsid === null || device.wifiSsid === undefined
+                ? null
+                : device.wifiSsid === ''
+                  ? 'Wi-Fi (name hidden by the OS)'
+                  : `Wi-Fi ${device.wifiSsid}`,
+              device.defaultGateway ? `gateway ${device.defaultGateway}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || <span className="text-muted-foreground">Wired</span>}
+          </HeaderFact>
+        ) : null}
         <HeaderFact label="Tags">
           {device.tags.length > 0 ? (
             <TagList tags={device.tags} />
@@ -107,6 +122,14 @@ function DeviceView({ device }: { device: DeviceDetail }) {
         </HeaderFact>
       </dl>
 
+      {device.isolatedAt ? (
+        <InlineAlert tone="danger" title="Isolated from the network" className="mb-4">
+          Since {formatDateTime(device.isolatedAt)}
+          {device.isolatedBy ? ` by ${device.isolatedBy}` : ''}
+          {device.isolationReason ? `: ${device.isolationReason}` : ''}. The device can only reach DranzoRMM, remote
+          desktop, DNS and DHCP until it is released.
+        </InlineAlert>
+      ) : null}
       <AgentCard device={device} />
 
       {/* Remote sessions belong to the page, not to one tab: switching tabs keeps them, leaving the page ends them. */}

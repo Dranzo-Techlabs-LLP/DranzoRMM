@@ -125,7 +125,7 @@ public static class SecurityScore
     {
         var devices = await db.Devices.AsNoTracking()
             .Where(d => d.Status == DeviceStatus.Active && (organizationId == null || d.OrganizationId == organizationId) && (deviceId == null || d.Id == deviceId))
-            .Select(d => new { d.Id, d.LastPatchScanAt }).ToListAsync(ct);
+            .Select(d => new { d.Id, d.LastPatchScanAt, d.IsolatedAt }).ToListAsync(ct);
         var ids = devices.Select(d => d.Id).ToList();
         var posture = await db.PostureSnapshots.AsNoTracking().Where(p => p.IsLatest && ids.Contains(p.DeviceId))
             .Select(p => new { p.DeviceId, p.AntivirusOk, p.FirewallOk, p.EncryptionOk }).ToDictionaryAsync(p => p.DeviceId, ct);
@@ -156,7 +156,7 @@ public static class SecurityScore
             var co = compliance.GetValueOrDefault(d.Id);
             var v = vulns.GetValueOrDefault(d.Id);
             return new ScoreInputs(p?.AntivirusOk, p?.FirewallOk, p?.EncryptionOk, d.LastPatchScanAt, pa?.Critical ?? 0, pa?.Failed ?? 0,
-                co?.Total ?? 0, co?.Ok ?? 0, vulnData, v?.High ?? 0, v?.Kev ?? 0, Isolated: false);
+                co?.Total ?? 0, co?.Ok ?? 0, vulnData, v?.High ?? 0, v?.Kev ?? 0, Isolated: d.IsolatedAt is not null);
         });
     }
 }

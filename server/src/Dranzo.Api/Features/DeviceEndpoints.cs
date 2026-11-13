@@ -172,7 +172,7 @@ public static class DeviceEndpoints
             var items = await q.Skip(skip).Take(take).Select(d => new
             {
                 d.Id, d.OrganizationId, d.SiteId, d.GroupId, d.Hostname, d.Os, d.OsName, d.OsVersion, d.Arch, d.Serial, d.Model, d.AgentVersion,
-                status = d.Status.ToString().ToLowerInvariant(), d.IsOnline, d.LastSeenAt, d.Tags, d.ConsoleUser, d.PendingReboot, d.CpuPercent, d.MemUsedPercent,
+                status = d.Status.ToString().ToLowerInvariant(), d.IsOnline, d.LastSeenAt, d.Tags, d.ConsoleUser, d.PendingReboot, d.CpuPercent, d.MemUsedPercent, d.IsolatedAt,
             }).ToListAsync(ct);
             return Results.Ok(new { total, online, page, pageSize = take, items });
         }).RequirePermission(Permissions.DevicesRead);
@@ -191,7 +191,7 @@ public static class DeviceEndpoints
                 d.Id, d.OrganizationId, d.SiteId, d.GroupId, d.Hostname, d.Os, d.OsName, d.OsVersion, d.Arch, d.Serial, d.Manufacturer, d.Model, d.AgentVersion,
                 d.MachineId, status = d.Status.ToString().ToLowerInvariant(), d.EnrolledAt, d.IsOnline, d.LastSeenAt, d.Tags, d.ConsoleUser, d.PendingReboot,
                 d.CpuPercent, d.MemUsedPercent, d.AgentRssBytes, d.CertNotAfter, d.PossibleDuplicateOfDeviceId, d.Capabilities, d.LastIp, d.UninstallCodeSet,
-                d.LastPatchScanAt, d.LastPatchInstallAt, meshInstalled = d.MeshNodeId != null, d.MacAddresses, d.DefaultGateway, d.WifiSsid,
+                d.LastPatchScanAt, d.LastPatchInstallAt, meshInstalled = d.MeshNodeId != null, d.MacAddresses, d.DefaultGateway, d.WifiSsid, d.IsolatedAt, d.IsolatedBy, d.IsolationReason,
                 inventoryCollectedAt = inventory?.CollectedAt,
                 inventory = inventory is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement?>(inventory.DataJson),
             });

@@ -24,6 +24,8 @@ const (
 	KindAgentConfigure    = "agent.configure"
 	KindAgentUninstall    = "agent.uninstall"
 	KindNetworkScan       = "network.scan"
+	KindNetworkIsolate    = "network.isolate"
+	KindNetworkRelease    = "network.release"
 )
 
 // Job limits (sections 3 and 6.1).
@@ -278,4 +280,26 @@ type NetworkScanResult struct {
 	Gateway   string            `json:"gateway"`
 	Neighbors []NetworkNeighbor `json:"neighbors"`
 	Truncated bool              `json:"truncated"`
+}
+
+// IsolationEndpoint is a host and port kept reachable while isolated.
+type IsolationEndpoint struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+// NetworkIsolateSpec is the spec of network.isolate.
+type NetworkIsolateSpec struct {
+	Allow   []IsolationEndpoint `json:"allow"`
+	Message string              `json:"message"`
+}
+
+// NetworkIsolateResult is the result of network.isolate.
+type NetworkIsolateResult struct {
+	Allowed []string `json:"allowed"`
+}
+
+// NetworkReleaseSpec is the spec of network.release.
+type NetworkReleaseSpec struct {
+	Message string `json:"message"`
 }

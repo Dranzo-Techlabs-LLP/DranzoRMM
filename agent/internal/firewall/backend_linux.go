@@ -5,6 +5,7 @@ package firewall
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"strings"
 
 	"github.com/dranzo/dranzormm/agent/internal/platform"
@@ -52,3 +53,27 @@ func (b nftBackend) Apply(ctx context.Context, rules []Rule) error {
 
 // SupportsPrograms reports whether rules may name a program (Windows Firewall only).
 const SupportsPrograms = false
+
+type nftIsolation struct{ b nftBackend }
+
+// NewIsolationBackend returns the nftables isolation (table inet dranzormm_isolation).
+func NewIsolationBackend(p platform.Platform) IsolationBackend {
+	return nftIsolation{b: nftBackend{exec: posture.Exec{Platform: p}, nft: posture.LookTool("nft")}}
+}
+
+func (n nftIsolation) Isolate(ctx context.Context, allow []netip.Addr) error {
+	if n.b.nft == "" {
+		return ErrUnsupported
+	}
+	_, err := n.b.exec.Output(ctx, posture.Cmd{Path: n.b.nft, Args: []string{"-f", "-"}, Stdin: RenderIsolationNft(allow), Env: []string{"LC_ALL=C"}})
+	return err
+}
+
+func (n nftIsolation) Release(ctx context.Context) error {
+	if n.b.nft == "" {
+		return ErrUnsupported
+	}
+	script := "add table inet " + NftIsolationTable + "\ndelete table inet " + NftIsolationTable + "\n"
+	_, err := n.b.exec.Output(ctx, posture.Cmd{Path: n.b.nft, Args: []string{"-f", "-"}, Stdin: script, Env: []string{"LC_ALL=C"}})
+	return err
+}

@@ -242,6 +242,8 @@ export interface DeviceListItem {
   tags: string[];
   consoleUser: string | null;
   pendingReboot: boolean;
+  /** Set while the device is isolated from the network. */
+  isolatedAt?: IsoDate | null;
   cpuPercent: number | null;
   memUsedPercent: number | null;
 }
@@ -283,6 +285,12 @@ export interface DeviceDetail extends DeviceListItem {
   lastPatchScanAt: IsoDate | null;
   lastPatchInstallAt: IsoDate | null;
   meshInstalled: boolean;
+  macAddresses?: string[];
+  defaultGateway?: string | null;
+  /** "" when the OS hides the SSID; null when not on Wi-Fi. */
+  wifiSsid?: string | null;
+  isolatedBy?: string | null;
+  isolationReason?: string | null;
   inventoryCollectedAt: IsoDate | null;
   inventory: Inventory | null;
 }

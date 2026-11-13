@@ -10,6 +10,7 @@
 //	dranzo-agent enroll [--data-dir D]
 //	dranzo-agent status [--data-dir D]
 //	dranzo-agent uninstall [--code XXXX] [--keep-data] [--data-dir D]
+//	dranzo-agent release-isolation [--data-dir D]
 //	dranzo-agent version
 package main
 
@@ -48,6 +49,7 @@ Usage:
   dranzo-agent enroll    [--data-dir DIR]
   dranzo-agent status    [--data-dir DIR]
   dranzo-agent uninstall [--code CODE] [--keep-data] [--data-dir DIR]
+  dranzo-agent release-isolation [--data-dir DIR]   (end a network isolation locally)
   dranzo-agent version
 `
 
@@ -74,6 +76,8 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 		err = cmdStatus(args[1:], stdout)
 	case "uninstall":
 		err = cmdUninstall(args[1:], stdout)
+	case "release-isolation":
+		err = cmdReleaseIsolation(args[1:], stdout)
 	case "update-guard":
 		// Run by the service manager before every start (systemd ExecStartPre) with the
 		// *previous* binary: rolls back an update whose new binary keeps crashing before it
@@ -227,6 +231,7 @@ func newAgent(paths config.Paths, log *slog.Logger, asService bool) (*agentcore.
 	if asService {
 		opts.SelfUninstall = func(context.Context) error {
 			removeFirewallRules(paths)
+			_ = releaseIsolationLocal(paths)
 			return svc.SelfUninstall(paths)
 		}
 	}
@@ -395,11 +400,30 @@ func cmdUninstall(args []string, stdout io.Writer) error {
 	if err := svc.Uninstall(); err != nil {
 		return err
 	}
-	// Rules DranzoRMM added to the host firewall go with the agent.
+	// Rules DranzoRMM added to the host firewall go with the agent, and so does an isolation.
 	removeFirewallRules(paths)
+	_ = releaseIsolationLocal(paths)
 	if !*keepData {
 		svc.Purge(paths)
 	}
 	fmt.Fprintf(stdout, "The %q service was removed.\n", svc.DisplayName)
+	return nil
+}
+
+// cmdReleaseIsolation lets a local administrator end a network isolation
+// without the server (brief section 1: the device stays under its owner's control).
+func cmdReleaseIsolation(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("release-isolation", flag.ContinueOnError)
+	dataDir := fs.String("data-dir", "", "override the data directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := requireElevated("release-isolation"); err != nil {
+		return err
+	}
+	if err := releaseIsolationLocal(config.ResolvePaths(*dataDir)); err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, "Network isolation released. The DranzoRMM server still shows the device as isolated until the agent reports in.")
 	return nil
 }

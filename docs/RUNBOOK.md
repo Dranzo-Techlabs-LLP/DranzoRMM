@@ -474,3 +474,11 @@ Approve them on the Mac after the MeshAgent is installed (System Settings → Pr
 relevant list → enable the agent). The DranzoRMM consent prompt and indicator are separate and always
 apply. With MDM (Phase 9, `docs/MDM_PLAN.md`) Full Disk Access and Accessibility can be pre-approved by a
 PPPC profile; Screen Recording can only be made approvable by a standard user, not granted silently.
+
+## 12. Network isolation and firewall rules (Phase 10)
+
+- **Isolate a device:** device page → Isolate (role Network Admin or Partner Admin, authenticator code, reason). The device keeps DranzoRMM, MeshCentral, DNS and DHCP only. It confirms within a minute; if it cannot reach the server after isolating, it releases itself and the job fails.
+- **Release without the server** (server down, device moved): on the device, as administrator / root: `dranzo-agent release-isolation`. The dashboard still shows the device as isolated until you release it there too.
+- **What the agent changes:** Windows Firewall groups `DranzoRMM` (policy rules) and `DranzoRMM Isolation`; nftables tables `inet dranzormm` and `inet dranzormm_isolation`; macOS pf anchors `com.apple/250.DranzoRMM` and `com.apple/200.DranzoRMMIsolation` (pf is switched on if it was off). Nothing else. Uninstalling the agent removes all of them.
+- **Linux without nftables:** firewall rules and isolation report "not supported"; install the `nftables` package.
+

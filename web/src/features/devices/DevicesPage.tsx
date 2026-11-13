@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { MonitorSmartphone, Search, X } from 'lucide-react';
+import { MonitorSmartphone, Search, ShieldBan, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useOrgFilter } from '@/app/org-filter';
@@ -7,7 +7,7 @@ import { OsIcon } from '@/components/os';
 import { EmptyState, ErrorState, LoadingRows, PageHeader, Panel } from '@/components/page';
 import { Pagination } from '@/components/pagination';
 import { RelativeTime } from '@/components/relative-time';
-import { DeviceStatus, PendingRebootBadge } from '@/components/status';
+import { DeviceStatus, PendingRebootBadge, StatusPill } from '@/components/status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -313,6 +313,11 @@ export default function DevicesPage() {
                             {d.hostname}
                           </Link>
                           {d.pendingReboot ? <PendingRebootBadge /> : null}
+                          {d.isolatedAt ? (
+                            <StatusPill tone="danger" icon={ShieldBan}>
+                              Isolated
+                            </StatusPill>
+                          ) : null}
                         </div>
                         {d.model ? <div className="text-muted-foreground text-xs">{d.model}</div> : null}
                       </TableHead>
