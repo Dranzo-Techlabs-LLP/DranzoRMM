@@ -17,7 +17,12 @@ const DESCRIPTIONS: Record<string, string> = {
     'Antivirus, firewall and disk encryption state, local administrators and vulnerabilities per device.',
   software: 'Software installed on each device, with version and publisher.',
   'audit-log': 'Every recorded action with its hash chain, newest first (up to 100,000 entries).',
+  'access-review':
+    'Every user and API key with roles, scopes, permissions, MFA, last activity and review findings. Partner admins only.',
 };
+
+/** Reports whose endpoint needs the permission over every organization. */
+const PARTNER_WIDE = new Set(['access-review']);
 
 const ALL = '';
 
@@ -64,13 +69,16 @@ export default function ReportsPage() {
       <QueryView
         query={reports}
         what="reports"
-        isEmpty={(d) => d.filter((r) => access.has(r.permission)).length === 0}
+        isEmpty={(d) =>
+          d.filter((r) => (PARTNER_WIDE.has(r.id) ? access.hasPartnerWide(r.permission) : access.has(r.permission)))
+            .length === 0
+        }
         empty={<EmptyState icon={FileBarChart} title="No reports available to you" />}
       >
         {(list) => (
           <ul className="grid gap-3 md:grid-cols-2">
             {list
-              .filter((r) => access.has(r.permission))
+              .filter((r) => (PARTNER_WIDE.has(r.id) ? access.hasPartnerWide(r.permission) : access.has(r.permission)))
               .map((r) => (
                 <li key={r.id}>
                   <Panel className="h-full">

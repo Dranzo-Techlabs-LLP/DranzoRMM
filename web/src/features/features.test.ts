@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { groupPermissions, permissionLabel } from '@/features/admin/permission-catalog';
+import { principalStatus, reviewSummary } from '@/features/admin/access/review';
 import { describeScope } from '@/features/admin/scope';
 import { formatAuditDetail, resultTone } from '@/features/audit/detail';
 import { readDeviceFilters, toApiFilter, writeDeviceFilters } from '@/features/devices/filters';
@@ -7,6 +8,7 @@ import { installCommands, tokenState } from '@/features/enrollment/tokens';
 import { timeZoneOptions } from '@/features/organizations/timezones';
 import { countDevices, summarizeByOrganization } from '@/features/overview/fleet';
 import { auditApi, type DeviceListItem, type EnrollmentToken, type InstallInfo, type Organization } from '@/lib/api';
+import type { AccessPrincipal } from '@/lib/api/access';
 import { formatBytes, formatDuration, formatRelative, localInputToIso } from '@/lib/format';
 
 const org = (id: string, name: string, deviceCount = 0, onlineCount = 0): Organization => ({
@@ -246,5 +248,38 @@ describe('formatting', () => {
     const zones = timeZoneOptions('Mars/Olympus_Mons');
     expect(zones).toContain('UTC');
     expect(zones).toContain('Mars/Olympus_Mons');
+  });
+});
+
+describe('access review', () => {
+  const base: AccessPrincipal = {
+    kind: 'user',
+    id: '1',
+    name: 'Ann',
+    email: 'ann@example.test',
+    disabled: false,
+    locked: false,
+    mfaEnabled: true,
+    lastActiveAt: null,
+    expiresAt: null,
+    grants: [],
+    permissions: [],
+    findings: [],
+  };
+
+  it('labels status for users and API keys', () => {
+    expect(principalStatus(base)).toEqual({ label: 'Active', tone: 'ok' });
+    expect(principalStatus({ ...base, locked: true })).toEqual({ label: 'Locked', tone: 'warn' });
+    expect(principalStatus({ ...base, disabled: true })).toEqual({ label: 'Disabled', tone: 'idle' });
+    expect(principalStatus({ ...base, kind: 'apikey', disabled: true })).toEqual({ label: 'Expired', tone: 'idle' });
+  });
+
+  it('counts findings only for active principals', () => {
+    const rows: AccessPrincipal[] = [
+      { ...base, findings: ['Full admin rights over every organization'] },
+      { ...base, id: '2', kind: 'apikey', findings: ['API key never expires'] },
+      { ...base, id: '3', disabled: true, findings: ['MFA not set up'] },
+    ];
+    expect(reviewSummary(rows)).toEqual({ users: 2, apiKeys: 1, withFindings: 2, fullAdmins: 1 });
   });
 });

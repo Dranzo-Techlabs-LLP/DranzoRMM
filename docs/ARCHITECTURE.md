@@ -42,7 +42,7 @@ Hierarchy: **Partner → Organization → Site → DeviceGroup → Device**.
 
 - Every tenant-owned row carries `PartnerId`; organisation-owned rows also carry `OrganizationId`; device-owned rows carry `DeviceId` plus a denormalised `OrganizationId`.
 - A `RoleAssignment` binds a principal (user or API key) to a `Role` at one scope: partner, organization, site or device group.
-- A `Role` is a set of permission strings (`devices.read`, `scripts.run`, ...). Built-in roles: Partner Admin, Technician, Read-only, Organization Viewer. Custom roles are partner-defined.
+- A `Role` is a set of permission strings (`devices.read`, `scripts.run`, ...). Built-in roles: Partner Admin, Technician, Read-only, Organization Viewer, Network Admin (network, firewall policies, isolation; no users or scripts). Custom roles are partner-defined.
 
 ### Central enforcement
 

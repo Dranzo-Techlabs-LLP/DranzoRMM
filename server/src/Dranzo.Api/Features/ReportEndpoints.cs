@@ -88,7 +88,7 @@ public static class ReportEndpoints
         return ms.ToArray();
     }
 
-    private static async Task<IResult> RenderAsync(string format, string slug, ReportData report, Ctx c, Guid? organizationId, CancellationToken ct)
+    public static async Task<IResult> RenderAsync(string format, string slug, ReportData report, Ctx c, Guid? organizationId, CancellationToken ct)
     {
         if (format is not ("csv" or "pdf"))
         {
@@ -113,6 +113,7 @@ public static class ReportEndpoints
             new { id = "security-posture", name = "Security posture", permission = Permissions.ReportsRead },
             new { id = "software", name = "Installed software", permission = Permissions.ReportsRead },
             new { id = "audit-log", name = "Audit log", permission = Permissions.AuditRead },
+            new { id = "access-review", name = "Access review (users, API keys, rights)", permission = Permissions.UsersRead },
         })).RequirePermission(Permissions.ReportsRead);
 
         api.MapGet("/reports/device-inventory.{format}", async (string format, Guid? organizationId, Ctx c, CancellationToken ct) =>

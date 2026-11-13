@@ -87,5 +87,6 @@ public static class FeatureRegistration
         ReleaseEndpoints.Map(api);
         ApiKeyEndpoints.Map(api);
         ReportEndpoints.Map(api);
+        AccessReviewEndpoints.Map(api);
     }
 }

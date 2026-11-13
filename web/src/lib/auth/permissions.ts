@@ -30,6 +30,10 @@ export const P = {
   apiKeysManage: 'apikeys.manage',
   settingsManage: 'settings.manage',
   reportsRead: 'reports.read',
+  networkRead: 'network.read',
+  networkManage: 'network.manage',
+  networkConfigure: 'network.configure',
+  devicesIsolate: 'devices.isolate',
 } as const;
 
 export interface Requirement {

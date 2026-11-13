@@ -94,6 +94,18 @@ Verification environment: macOS (Apple Silicon) dev machine, local PostgreSQL 16
 
 - [x] `docs/MDM_PLAN.md`
 
+## Phase 10: Network and firewall
+
+Requested after the first LAN tests: individual system security and firewall, separate guest and office Wi-Fi (UniFi), central device and network access management, central network administration. Approved plan: firewall rule policies, device isolation, security score, network discovery, approval list, Network Admin role, access review, UniFi integration, 802.1X/RADIUS.
+
+- [x] 10a Permissions `network.read`, `network.manage`, `network.configure` (interactive only), `devices.isolate`; built-in role **Network Admin**; access review page and report (users, API keys, roles, scopes, effective permissions, findings)
+- [ ] 10b Security score
+- [ ] 10c Network discovery and device approval list
+- [ ] 10d Firewall rule policies
+- [ ] 10e Device isolation
+- [ ] 10f UniFi integration: guest and office Wi-Fi, network devices, client blocking
+- [ ] 10g 802.1X / RADIUS (EAP-TLS) with a per-organization network CA
+
 ## Security review
 
 An independent review of the server found 8 confirmed issues (2 High, 4 Medium, 2 Low) plus several suspected ones. All are fixed with regression tests; details in `docs/THREAT_MODEL.md` (end).

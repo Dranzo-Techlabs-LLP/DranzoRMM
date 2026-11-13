@@ -24,6 +24,7 @@ const AREA_LABELS: Record<string, string> = {
   apikeys: 'API keys',
   webhooks: 'Webhooks',
   settings: 'Settings',
+  network: 'Network',
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -38,6 +39,8 @@ const ACTION_LABELS: Record<string, string> = {
   terminal: 'Open a terminal',
   files: 'Browse and transfer files',
   desktop: 'Control the desktop',
+  isolate: 'Isolate from the network',
+  configure: 'Configure controllers, Wi-Fi and RADIUS',
 };
 
 export interface PermissionItem {

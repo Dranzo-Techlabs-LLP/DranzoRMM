@@ -82,6 +82,13 @@ public static class Permissions
     public const string ApiKeysManage = "apikeys.manage";
     public const string WebhooksManage = "webhooks.manage";
     public const string SettingsManage = "settings.manage";
+    public const string NetworkRead = "network.read";
+    /// <summary>Scan networks, approve or block discovered devices.</summary>
+    public const string NetworkManage = "network.manage";
+    /// <summary>Network controllers (UniFi), Wi-Fi networks, RADIUS and the network CA.</summary>
+    public const string NetworkConfigure = "network.configure";
+    /// <summary>Cut a device off the network (except DranzoRMM) and release it.</summary>
+    public const string DevicesIsolate = "devices.isolate";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -94,13 +101,14 @@ public static class Permissions
         RemoteTerminal, RemoteFiles, RemoteDesktop, SessionsRead,
         PoliciesRead, PoliciesManage,
         ReleasesManage, ReportsRead, ApiKeysManage, WebhooksManage, SettingsManage,
+        NetworkRead, NetworkManage, NetworkConfigure, DevicesIsolate,
     ];
 
     /// <summary>Permissions an API key may never hold or exercise (interactive, step-up protected).</summary>
     public static readonly IReadOnlySet<string> InteractiveOnly = new HashSet<string>
     {
         UsersManage, RolesManage, ApiKeysManage, ReleasesManage, SettingsManage, DevicesRevoke,
-        RemoteTerminal, RemoteFiles, RemoteDesktop,
+        RemoteTerminal, RemoteFiles, RemoteDesktop, NetworkConfigure,
     };
 }
 
@@ -110,6 +118,7 @@ public static class BuiltInRoles
     public const string Technician = "Technician";
     public const string ReadOnly = "Read-only";
     public const string OrganizationViewer = "Organization Viewer";
+    public const string NetworkAdmin = "Network Admin";
 
     public static readonly IReadOnlyDictionary<string, string[]> Definitions = new Dictionary<string, string[]>
     {
@@ -131,6 +140,13 @@ public static class BuiltInRoles
         [
             Permissions.TenantsRead, Permissions.DevicesRead, Permissions.SoftwareRead, Permissions.PatchesRead,
             Permissions.SecurityRead, Permissions.AlertsRead, Permissions.PoliciesRead, Permissions.ReportsRead,
+        ],
+        [NetworkAdmin] =
+        [
+            Permissions.TenantsRead, Permissions.DevicesRead, Permissions.DevicesIsolate, Permissions.JobsRead,
+            Permissions.NetworkRead, Permissions.NetworkManage, Permissions.NetworkConfigure,
+            Permissions.PoliciesRead, Permissions.PoliciesManage, Permissions.SecurityRead,
+            Permissions.AlertsRead, Permissions.AlertsManage, Permissions.ReportsRead, Permissions.AuditRead,
         ],
     };
 }

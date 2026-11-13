@@ -12,7 +12,15 @@ const labels = (areas: ReturnType<typeof visibleNav>) => areas.flatMap((a) => a.
 describe('permission-gated navigation', () => {
   it('shows a Partner Admin every implemented page, grouped by area', () => {
     const nav = visibleNav(accessFor(ME));
-    expect(labels(nav)).toEqual(['Overview', 'Devices', 'Organizations', 'Enrollment', 'Audit log', 'Users & roles']);
+    expect(labels(nav)).toEqual([
+      'Overview',
+      'Devices',
+      'Organizations',
+      'Enrollment',
+      'Audit log',
+      'Users & roles',
+      'Access review',
+    ]);
     expect(nav.map((a) => a.label)).toEqual(['Fleet', 'Records', 'Admin']);
   });
 
@@ -25,7 +33,7 @@ describe('permission-gated navigation', () => {
     const scoped = accessFor({ permissions: ['users.read', 'audit.read'], partnerWide: false });
     expect(labels(visibleNav(scoped))).toEqual(['Audit log']);
     const partner = accessFor({ permissions: ['users.read', 'audit.read'], partnerWide: true });
-    expect(labels(visibleNav(partner))).toEqual(['Audit log', 'Users & roles']);
+    expect(labels(visibleNav(partner))).toEqual(['Audit log', 'Users & roles', 'Access review']);
   });
 
   it('shows nothing without a session or without roles', () => {
@@ -100,7 +108,7 @@ describe('Sidebar', () => {
     );
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     expect(within(nav).getByRole('link', { name: 'Audit log' })).toBeInTheDocument();
-    expect(within(nav).getAllByRole('link')).toHaveLength(6);
+    expect(within(nav).getAllByRole('link')).toHaveLength(7);
     // The rail wraps links in a tooltip trigger; the active state and classes must survive that.
     const overview = within(nav).getByRole('link', { name: 'Overview' });
     expect(overview).toHaveAttribute('aria-current', 'page');

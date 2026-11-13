@@ -4,6 +4,10 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 
 ## Unreleased (0.1.0-dev)
 
+### Phase 10: Network and firewall
+- Permissions `network.read`, `network.manage`, `network.configure`, `devices.isolate` and the built-in role Network Admin.
+- Access review: every user and API key with roles, scopes, effective permissions and findings (no MFA, inactive 90+ days, never-expiring keys, full admins). Page under Admin, CSV/PDF report, partner admins only, viewing is audited.
+
 ### Fixes after first LAN testing
 - Windows: single-PC installer script (`scripts/windows-kit/Install-DranzoAgent.ps1` + double-click `.cmd`) that reports every step.
 - MeshCentral: `Dranzo:Mesh:CertificateSha256` pins a self-signed MeshCentral certificate for MeshAgent downloads (normal validation otherwise).

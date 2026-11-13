@@ -106,5 +106,7 @@ public static partial class CrossTenantSeedExtensions
         ids.Map("schedules", Guid.NewGuid(), leakMarker: false);
         ids.Map("audit", Guid.NewGuid(), leakMarker: false);
         ids.Map("agent", Guid.NewGuid(), leakMarker: false);
+        // Phase 10: partner-level access review.
+        ids.Map("access-review", Guid.NewGuid(), leakMarker: false);
     }
 }
