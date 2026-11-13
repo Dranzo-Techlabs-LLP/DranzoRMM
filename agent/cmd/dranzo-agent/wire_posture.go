@@ -22,6 +22,7 @@ func wirePosture(a *agentcore.Agent) error {
 		}
 		return jobs.Succeeded()
 	}))
-	a.Jobs().Register(protocol.KindPolicyEvaluate, policy.New(collector, env.Platform))
+	fw := firewallManager(env.Platform, env.Paths, func() string { return a.Config().ServerURL })
+	a.Jobs().Register(protocol.KindPolicyEvaluate, policy.New(collector, env.Platform).WithFirewall(fw))
 	return nil
 }

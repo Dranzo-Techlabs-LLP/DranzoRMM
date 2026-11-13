@@ -233,6 +233,8 @@ Rules:
 
 Built-in policy checks (`policy.evaluate.check`): `firewall.enabled`, `antivirus.enabled`, `screenlock.timeout` (`params.maxSeconds`), `localadmins.allowed` (`params.allowed: string[]`), `usb.storage.blocked` (Windows), `password.policy` (Windows; `params.minLength`, `maxAgeDays`, `complexity`), `diskencryption.enabled` (report only: `remediate` is ignored), `script` (`params.checkScript`, `params.remediationScript`, `params.language`: check is compliant on exit code 0).
 
+`firewall.rules` (Phase 10): `params.rules: [{name, direction: "in"|"out", action: "allow"|"block", protocol: "tcp"|"udp"|"any", ports?: ["443", "8000-8100"], remoteAddresses?: [IP or CIDR], program?: "C:\\...\\app.exe" (Windows only)}]`, at most 100. The agent compares the rules it owns (Windows Firewall group `DranzoRMM`, rule names `DranzoRMM-<id>`; nftables table `inet dranzormm`, chains at priority -10, rule comments `dranzo:<id>`; pf anchor `com.apple/250.DranzoRMM`, labels `dranzo:<id>`) with the wanted set, where `<id>` is the first 16 hex digits of SHA-256 over the rule's normalized content. It never changes rules it does not own. Remediation replaces the owned set, then opens a new TCP connection to the server; if that fails within 30 s the previous rules are restored and the check reports failure. Rules that block all outgoing traffic are refused (use isolation). Program rules are skipped (and named in the detail) on macOS and Linux. Uninstall removes every owned rule.
+
 ### 6.3 `job.cancel` (signed)
 
 `{deviceId, nonce, issuedAt, expiresAt, jobRunId}` → the agent kills the process tree and sends `job.result` with `cancelled`.

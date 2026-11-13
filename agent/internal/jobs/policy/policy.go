@@ -45,6 +45,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/dranzo/dranzormm/agent/internal/firewall"
 	"github.com/dranzo/dranzormm/agent/internal/jobs"
 	"github.com/dranzo/dranzormm/agent/internal/jobs/script"
 	"github.com/dranzo/dranzormm/agent/internal/platform"
@@ -62,6 +63,7 @@ const (
 	CheckPasswordPolicy = "password.policy"
 	CheckDiskEncryption = "diskencryption.enabled"
 	CheckScript         = "script"
+	CheckFirewallRules  = "firewall.rules"
 )
 
 // Detail prefixes (see the package comment).
@@ -133,11 +135,24 @@ func reportOnlyf(format string, args ...any) error {
 	return &reportOnlyError{reason: fmt.Sprintf(format, args...)}
 }
 
+// Firewall applies the rules DranzoRMM owns; *firewall.Manager implements it.
+type Firewall interface {
+	Owned(ctx context.Context) ([]string, error)
+	Enforce(ctx context.Context, rules []firewall.Rule) error
+}
+
 // Handler is the jobs.Handler for the "policy.evaluate" kind.
 type Handler struct {
 	src    Source
 	be     backend
 	script jobs.Handler
+	fw     Firewall
+}
+
+// WithFirewall enables the firewall.rules check.
+func (h *Handler) WithFirewall(fw Firewall) *Handler {
+	h.fw = fw
+	return h
 }
 
 // New returns the handler. src is the posture collector; p runs the
@@ -272,6 +287,8 @@ func (h *Handler) evaluate(jc *jobs.JobContext, c protocol.PolicyCheck) outcome 
 		return h.checkDiskEncryption(jc, c)
 	case CheckScript:
 		return h.checkScript(jc, c)
+	case CheckFirewallRules:
+		return h.checkFirewallRules(jc, c)
 	}
 	return outcome{detail: DetailUnknownCheck}
 }

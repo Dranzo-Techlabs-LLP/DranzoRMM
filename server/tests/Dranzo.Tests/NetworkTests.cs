@@ -291,4 +291,47 @@ public class NetworkTests(ServerFixture fx)
         await Task.Delay(500);
         Assert.Equal(0, (await admin.GetJsonAsync($"/api/v1/network/devices?organizationId={org.OrgId}")).GetProperty("total").GetInt32());
     }
+
+    // ----- 10d: firewall rule policies -----
+
+    private static JsonElement Params(object o) => JsonSerializer.SerializeToElement(o);
+
+    [Fact]
+    public void Firewall_rule_params_are_validated_like_the_agent()
+    {
+        Assert.Null(FirewallRules.Validate(Params(new { rules = new[] { new { name = "Block SMB", direction = "in", action = "block", protocol = "tcp", ports = new[] { "445", "8000-8100" }, remoteAddresses = new[] { "10.0.0.0/8", "fd00::1" } } } })));
+        Assert.Null(FirewallRules.Validate(Params(new { rules = new[] { new { name = "No torrent", direction = "out", action = "block", protocol = "any", program = @"C:\Apps\t.exe" } } })));
+        string? Bad(object rule) => FirewallRules.Validate(Params(new { rules = new[] { rule } }));
+        Assert.NotNull(FirewallRules.Validate(Params(new { rules = Array.Empty<object>() })));
+        Assert.NotNull(FirewallRules.Validate(Params(new { })));
+        Assert.Contains("name", Bad(new { name = "x\"; rm", direction = "in", action = "block", protocol = "tcp" }), StringComparison.Ordinal);
+        Assert.Contains("direction", Bad(new { name = "a", direction = "both", action = "block", protocol = "tcp" }), StringComparison.Ordinal);
+        Assert.Contains("ports need protocol", Bad(new { name = "a", direction = "in", action = "block", protocol = "any", ports = new[] { "80" } }), StringComparison.Ordinal);
+        Assert.Contains("invalid port", Bad(new { name = "a", direction = "in", action = "block", protocol = "tcp", ports = new[] { "90-80" } }), StringComparison.Ordinal);
+        Assert.Contains("invalid address", Bad(new { name = "a", direction = "in", action = "block", protocol = "tcp", remoteAddresses = new[] { "10.0.0.0/40" } }), StringComparison.Ordinal);
+        Assert.Contains("program", Bad(new { name = "a", direction = "out", action = "block", protocol = "any", program = "t.exe" }), StringComparison.Ordinal);
+        Assert.Contains("isolation", Bad(new { name = "a", direction = "out", action = "block", protocol = "any" }), StringComparison.Ordinal);
+        Assert.NotNull(FirewallRules.Validate(Params(new { rules = Enumerable.Range(0, 101).Select(i => new { name = "r" + i, direction = "in", action = "allow", protocol = "tcp" }) })));
+    }
+
+    [Fact]
+    public async Task Firewall_rules_policy_reaches_every_os_with_its_rules()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Fw " + U);
+        await using var win = await TestAgent.EnrollAsync(fx, org.Token, "fw-win", os: "windows");
+        var rules = new[] { new { name = "Block SMB", direction = "in", action = "block", protocol = "tcp", ports = new[] { "445" } } };
+        var bad = await admin.PostAsync("/api/v1/policies", new { name = "Bad fw " + U, check = "firewall.rules", @params = new { rules = new[] { new { name = "a", direction = "out", action = "block", protocol = "any" } } }, organizationId = org.OrgId });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        var policy = (await admin.PostJsonAsync("/api/v1/policies", new { name = "Fw rules " + U, check = "firewall.rules", @params = new { rules }, remediate = true, organizationId = org.OrgId })).GetProperty("id").GetGuid();
+        await admin.PostJsonAsync($"/api/v1/policies/{policy}/assignments", new { scopeType = "Organization", scopeId = org.OrgId });
+        Assert.True((await admin.PostAsync("/api/v1/policies/evaluate", new { organizationId = org.OrgId })).IsSuccessStatusCode);
+        var job = await win.NextJobAsync("policy.evaluate");
+        var check = job.Payload.GetProperty("spec").GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("check").GetString() == "firewall.rules");
+        Assert.True(check.GetProperty("remediate").GetBoolean());
+        Assert.Equal("445", check.GetProperty("params").GetProperty("rules")[0].GetProperty("ports")[0].GetString());
+        await win.CompleteAsync(job, result: new { results = new[] { new { policyId = policy, check = "firewall.rules", compliant = true, remediated = true, detail = "2 of 2 rules missing; applied" } } });
+        var compliance = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{win.DeviceId}/compliance"), c => c.GetArrayLength() == 1);
+        Assert.True(compliance[0].GetProperty("compliant").GetBoolean());
+    }
 }

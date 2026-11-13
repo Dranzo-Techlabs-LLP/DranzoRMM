@@ -225,7 +225,10 @@ func newAgent(paths config.Paths, log *slog.Logger, asService bool) (*agentcore.
 		Version:  buildinfo.Version,
 	}
 	if asService {
-		opts.SelfUninstall = func(context.Context) error { return svc.SelfUninstall(paths) }
+		opts.SelfUninstall = func(context.Context) error {
+			removeFirewallRules(paths)
+			return svc.SelfUninstall(paths)
+		}
 	}
 	agent, err := agentcore.New(opts)
 	if err != nil {
@@ -392,6 +395,8 @@ func cmdUninstall(args []string, stdout io.Writer) error {
 	if err := svc.Uninstall(); err != nil {
 		return err
 	}
+	// Rules DranzoRMM added to the host firewall go with the agent.
+	removeFirewallRules(paths)
 	if !*keepData {
 		svc.Purge(paths)
 	}

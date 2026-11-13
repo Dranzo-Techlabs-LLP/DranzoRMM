@@ -101,7 +101,7 @@ Requested after the first LAN tests: individual system security and firewall, se
 - [x] 10a Permissions `network.read`, `network.manage`, `network.configure` (interactive only), `devices.isolate`; built-in role **Network Admin**; access review page and report (users, API keys, roles, scopes, effective permissions, findings)
 - [x] 10b Security score 0-100 with grade and per-part reasons (antivirus 20, firewall 15, encryption 15, updates 20, policies 15, vulnerabilities 15; unknown parts left out). Device Security tab card, score column, low-score filter and average on Security, score in the security-posture report
 - [x] 10c Network discovery (`network.scan`: neighbor table after a TCP wake-up sweep of the device's private /22-or-smaller subnets; live-tested on macOS, Windows/Linux fixture-tested) and device approval list (approve, block, forget, bulk; audited); managed devices matched by inventory MAC; inventory reports default gateway and Wi-Fi (SSID best effort); alert `network.unknown_device` (one summary on a site's first scan). Vendor names (IEEE OUI) not yet
-- [ ] 10d Firewall rule policies
+- [x] 10d Firewall rule policies (`firewall.rules` check): rule editor, server + agent validation, Windows Firewall group / nftables table / pf anchor owned by DranzoRMM, reachability check with rollback, removal on uninstall. Live-tested: nftables in a Linux container. Windows and macOS pf: fixture-tested only (macOS needs root)
 - [ ] 10e Device isolation
 - [ ] 10f UniFi integration: guest and office Wi-Fi, network devices, client blocking
 - [ ] 10g 802.1X / RADIUS (EAP-TLS) with a per-organization network CA

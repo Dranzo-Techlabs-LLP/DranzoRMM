@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildFirewallRules, describeRule, EMPTY_RULE, rulesToForm, type FirewallRuleForm } from './firewall-rules';
 import {
   availableOs,
   buildPolicyParams,
@@ -106,5 +107,73 @@ describe('policy params', () => {
     expect(formatInterval(60)).toBe('Hourly');
     expect(formatInterval(1440 * 2)).toBe('Every 2 days');
     expect(formatInterval(45)).toBe('Every 45 minutes');
+  });
+});
+
+describe('firewall.rules', () => {
+  const rule = { ...EMPTY_RULE, name: 'Block SMB', ports: '445, 139', remoteAddresses: '10.0.0.0/8\nfd00::/8' };
+
+  it('builds the rules parameter', () => {
+    const built = buildFirewallRules([rule]);
+    expect(built).toEqual({
+      ok: true,
+      rules: [
+        {
+          name: 'Block SMB',
+          direction: 'in',
+          action: 'block',
+          protocol: 'tcp',
+          ports: ['445', '139'],
+          remoteAddresses: ['10.0.0.0/8', 'fd00::/8'],
+        },
+      ],
+    });
+    expect(rulesToForm(built.ok ? built.rules : [])[0]?.ports).toBe('445, 139');
+  });
+
+  it('refuses what the server refuses', () => {
+    const bad = (patch: Partial<FirewallRuleForm>) => buildFirewallRules([{ ...rule, ...patch }]).ok;
+    expect(buildFirewallRules([]).ok).toBe(false);
+    expect(bad({ name: '' })).toBe(false);
+    expect(bad({ name: 'x"; rm' })).toBe(false);
+    expect(bad({ protocol: 'any' })).toBe(false); // ports need TCP or UDP
+    expect(bad({ ports: '90-80' })).toBe(false);
+    expect(bad({ ports: '70000' })).toBe(false);
+    expect(bad({ remoteAddresses: '10.0.0.0/33' })).toBe(false);
+    expect(bad({ remoteAddresses: '300.1.1.1' })).toBe(false);
+    expect(bad({ program: 'app.exe' })).toBe(false);
+    expect(bad({ direction: 'out', protocol: 'any', ports: '', remoteAddresses: '' })).toBe(false);
+    expect(bad({ direction: 'out', protocol: 'any', ports: '', remoteAddresses: '', program: 'C:\\Apps\\t.exe' })).toBe(
+      true,
+    );
+  });
+
+  it('describes rules in words', () => {
+    expect(
+      describeRule({
+        name: 'x',
+        direction: 'in',
+        action: 'block',
+        protocol: 'tcp',
+        ports: ['445'],
+        remoteAddresses: ['10.0.0.0/8'],
+      }),
+    ).toBe('Block incoming TCP 445 from 10.0.0.0/8');
+    expect(describeRule({ name: 'x', direction: 'out', action: 'allow', protocol: 'any' })).toBe(
+      'Allow outgoing all traffic',
+    );
+  });
+
+  it('validates the whole policy form', () => {
+    const form = {
+      ...policyToForm(null, { check: 'firewall.rules', organizationId: '' }),
+      name: 'Fw',
+      firewallRules: [rule],
+    };
+    expect(validatePolicy(form, { 'firewall.rules': ['windows', 'macos', 'linux'] }, true).ok).toBe(true);
+    expect(validatePolicy({ ...form, firewallRules: [] }, { 'firewall.rules': ['windows'] }, true)).toMatchObject({
+      ok: false,
+      errors: { firewallRules: 'Add at least one rule.' },
+    });
   });
 });

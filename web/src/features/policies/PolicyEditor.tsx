@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { FIREWALL_RULES_CHECK } from './firewall-rules';
+import { FirewallRulesEditor } from './FirewallRulesEditor';
 import { errorMessage, isApiError, type Organization } from '@/lib/api';
 import { policiesApi, policyKeys, type Policy } from '@/lib/api/policies';
 import { osLabel } from '@/lib/os';
@@ -204,6 +206,15 @@ export function PolicyEditor({
             />
           )}
         </Field>
+      ) : null}
+      {form.check === FIREWALL_RULES_CHECK ? (
+        <FirewallRulesEditor
+          rules={form.firewallRules}
+          error={errors.firewallRules ?? null}
+          onChange={(firewallRules) => {
+            set({ firewallRules });
+          }}
+        />
       ) : null}
       {form.check === 'localadmins.allowed' ? (
         <Field

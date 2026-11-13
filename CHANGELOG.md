@@ -7,6 +7,7 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 ### Phase 10: Network and firewall
 - Permissions `network.read`, `network.manage`, `network.configure`, `devices.isolate` and the built-in role Network Admin.
 - Security score per device (0-100, A-F) with the reason for every lost point; shown on the device, on the Security page (lowest first, average, low-score filter) and in the security-posture report.
+- Firewall rule policies: new policy check `firewall.rules` with a rule editor (allow/block, direction, protocol, ports, addresses, Windows program). DranzoRMM only manages its own rules, rolls back if the device can no longer reach the server, and removes its rules on uninstall.
 - Network discovery: `network.scan` job lists every device a managed computer sees on its local network (IP, MAC, reverse-DNS name, gateway, private-MAC flag); Network > Network devices page with approve/block/forget and bulk actions; new-device alert. Inventory now reports the default gateway and the Wi-Fi connection.
 - Access review: every user and API key with roles, scopes, effective permissions and findings (no MFA, inactive 90+ days, never-expiring keys, full admins). Page under Admin, CSV/PDF report, partner admins only, viewing is audited.
 

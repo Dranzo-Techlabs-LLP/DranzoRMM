@@ -1,5 +1,12 @@
 import type { Id } from '@/lib/api';
 import type { Policy, PolicyInput } from '@/lib/api/policies';
+import {
+  buildFirewallRules,
+  FIREWALL_RULES_CHECK,
+  rulesToForm,
+  type FirewallRule,
+  type FirewallRuleForm,
+} from './firewall-rules';
 
 /**
  * Policy checks and their settings. The list of checks and the operating systems each exists on come from the
@@ -54,6 +61,13 @@ const CHECKS: Record<string, CheckInfo> = {
     description: 'Every volume must be encrypted (BitLocker, FileVault or LUKS).',
     remediation: null,
   },
+  [FIREWALL_RULES_CHECK]: {
+    label: 'Firewall rules',
+    description:
+      'The firewall rules below must be in place. DranzoRMM manages only its own rules (group or table "DranzoRMM"); other rules are never touched.',
+    remediation:
+      'Adds, updates or removes the DranzoRMM rules. If the device cannot reach DranzoRMM afterwards, the previous rules are restored.',
+  },
   [SCRIPT_CHECK]: {
     label: 'Custom script',
     description: 'Runs your check script; the device complies when the script exits with code 0.',
@@ -103,6 +117,7 @@ export interface PolicyForm {
   language: string;
   checkScript: string;
   remediationScript: string;
+  firewallRules: FirewallRuleForm[];
 }
 
 function text(value: unknown, fallback = ''): string {
@@ -128,6 +143,7 @@ export function policyToForm(policy: Policy | null, defaults: { check: string; o
     language: text(p.language, 'bash'),
     checkScript: text(p.checkScript),
     remediationScript: text(p.remediationScript),
+    firewallRules: rulesToForm(p.rules),
   };
 }
 
@@ -167,7 +183,14 @@ const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
 
 export type ParamErrors = Partial<
   Record<
-    'maxSeconds' | 'allowed' | 'minLength' | 'maxAgeDays' | 'language' | 'checkScript' | 'remediationScript',
+    | 'maxSeconds'
+    | 'allowed'
+    | 'minLength'
+    | 'maxAgeDays'
+    | 'language'
+    | 'checkScript'
+    | 'remediationScript'
+    | 'firewallRules',
     string
   >
 >;
@@ -207,6 +230,15 @@ export function buildPolicyParams(
         errors.maxAgeDays = 'Enter a whole number of days from 0 to 999. 0 means passwords do not expire.';
       }
       params = { minLength, maxAgeDays, complexity: form.complexity };
+      break;
+    }
+    case FIREWALL_RULES_CHECK: {
+      const built = buildFirewallRules(form.firewallRules);
+      if (built.ok) {
+        params = { rules: built.rules };
+      } else {
+        errors.firewallRules = built.error;
+      }
       break;
     }
     case SCRIPT_CHECK: {
@@ -317,6 +349,10 @@ export function describePolicyParams(check: string, params: Record<string, unkno
       ]
         .filter(Boolean)
         .join(', ');
+    case FIREWALL_RULES_CHECK: {
+      const rules = Array.isArray(params.rules) ? (params.rules as FirewallRule[]) : [];
+      return `${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}: ${rules.map((r) => r.name).join(', ')}`;
+    }
     case SCRIPT_CHECK:
       return typeof params.language === 'string' ? (SCRIPT_LANGUAGES[params.language]?.label ?? params.language) : '';
     default:

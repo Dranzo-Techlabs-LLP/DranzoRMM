@@ -26,6 +26,7 @@ public static class PolicyChecks
         ["usb.storage.blocked"] = ["windows"],
         ["password.policy"] = ["windows"],
         ["diskencryption.enabled"] = ["windows", "macos", "linux"],
+        [FirewallRules.Check] = ["windows", "macos", "linux"],
         [Script] = ["windows", "macos", "linux"],
     };
 
@@ -43,6 +44,8 @@ public static class PolicyChecks
                 return p.TryGetProperty("allowed", out var a) && a.ValueKind == JsonValueKind.Array && a.GetArrayLength() <= 100
                     && a.EnumerateArray().All(x => x.ValueKind == JsonValueKind.String && x.GetString() is { Length: > 0 and <= 128 } n && !n.Any(char.IsControl))
                     ? null : "params.allowed must be a list of up to 100 account names.";
+            case FirewallRules.Check:
+                return FirewallRules.Validate(p);
             case "password.policy":
                 return (!p.TryGetProperty("minLength", out var ml) || (ml.TryGetInt32(out var m) && m is >= 0 and <= 128))
                     && (!p.TryGetProperty("maxAgeDays", out var ma) || (ma.TryGetInt32(out var d) && d is >= 0 and <= 999))
