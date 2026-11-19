@@ -21,6 +21,7 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 - macOS consent prompt: announced in Notification Center with a sound before the dialog, so a dialog behind a full-screen app or on another Space is still noticed. Not yet verified on a Mac.
 - Vulnerabilities: a macOS installer receipt (`com.apple.pkg.*`) no longer duplicates every finding of its app (same product and major.minor version only; an older separate install is still matched).
 - Inventory (macOS): read-only APFS/HFS volumes under /Volumes (mounted disk images) are no longer listed as disks; read-only NTFS and locked USB drives still are.
+- Agent self-update (Windows): staging failed with "sync ...dranzo-agent.new.exe: Access is denied" because the staged file was flushed through a read-only handle, which Windows refuses. Found when rolling out 0.1.1; fixed in 0.1.2. Agents older than 0.1.2 on Windows cannot update themselves and need a one-time manual (or scripted) replacement.
 - Remote file sessions: uploads and downloads count in the session's bytes in/out.
 - Device page: uptime counts from the boot time while the device is online (no longer frozen at inventory time); "Network" says "Not reported by the agent" instead of "Wired" when nothing was reported.
 

@@ -123,8 +123,16 @@ func duplicate(src, dst string) error {
 	return syncFile(dst)
 }
 
+// syncFile flushes path to stable storage. The file is opened for writing:
+// Windows refuses FlushFileBuffers on a read-only handle ("Access is denied"),
+// which made every Windows self-update fail at the staging step (field test
+// 2026-11-19). If the file cannot be opened for writing its data is already
+// durable: copyFile flushed it before the mode was changed.
 func syncFile(path string) error {
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if errors.Is(err, os.ErrPermission) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
