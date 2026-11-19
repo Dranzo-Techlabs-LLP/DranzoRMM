@@ -33,7 +33,7 @@ services:
   # the same Azure Blob code path as production. The S3 client is still in the server (Dranzo__Storage__Type=s3)
   # for anyone who has an S3-compatible store.
   azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    image: mcr.microsoft.com/azure-storage/azurite:3.38.0
     command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --skipApiVersionCheck
     volumes:
       - blobdata:/data
