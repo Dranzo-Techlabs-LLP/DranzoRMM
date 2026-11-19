@@ -69,7 +69,9 @@ func ValidWingetID(s string) bool {
 func ParseDpkgStatus(out string) PackageState {
 	for _, l := range Lines(out) {
 		status, version, ok := strings.Cut(l, "\t")
-		if ok && strings.HasPrefix(status, "ii") {
+		// The second letter is the current state ("i" = installed); the first is
+		// only the wanted state, so a held package ("hi") is installed too.
+		if ok && len(status) >= 2 && status[1] == 'i' {
 			return PackageState{Installed: true, Version: Clean(version, maxVersionBytes)}
 		}
 	}

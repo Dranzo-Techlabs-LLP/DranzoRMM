@@ -1021,3 +1021,18 @@ func TestFakeKeepsItsContract(t *testing.T) {
 		t.Errorf("timeout: %v %v %v after %v", yes, asked, err, time.Since(started))
 	}
 }
+
+// The macOS consent question is announced in Notification Center (with a
+// sound) before the dialog, so a dialog hidden behind a full-screen app or on
+// another Space is still noticed. The announcement uses the argv variables,
+// never inlined text, and is best effort (inside try).
+func TestMacConfirmAnnouncesBeforeTheDialog(t *testing.T) {
+	n := strings.Index(macConfirmScript, "display notification dlgText with title dlgTitle")
+	d := strings.Index(macConfirmScript, "display dialog dlgText")
+	if n < 0 || d < 0 || n > d {
+		t.Fatalf("notification must come before the dialog (notification at %d, dialog at %d)", n, d)
+	}
+	if !strings.Contains(macConfirmScript[:n], "try") {
+		t.Fatal("the notification must be inside try so a refusal cannot stop the dialog")
+	}
+}

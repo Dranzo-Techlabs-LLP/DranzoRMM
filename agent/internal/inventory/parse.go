@@ -20,6 +20,9 @@ type Partition struct {
 	Device     string
 	MountPoint string
 	FSType     string
+	// ReadOnly is set for mounts with the "ro" option. On macOS a read-only
+	// volume under /Volumes is almost always a mounted disk image (.dmg).
+	ReadOnly bool
 }
 
 var linuxRealFS = map[string]struct{}{
@@ -64,7 +67,13 @@ func FilterPartitions(family string, parts []Partition) []Partition {
 			}
 		case protocol.OSMacOS:
 			_, real := darwinRealFS[fs]
-			keep = real && (p.MountPoint == "/" || strings.HasPrefix(p.MountPoint, "/Volumes/"))
+			// "/" is the sealed, read-only system volume and is always kept. A
+			// read-only APFS/HFS volume under /Volumes is a mounted disk image
+			// (installer .dmg), not storage of the computer. Other read-only
+			// volumes are real disks: macOS mounts NTFS drives read-only, and a
+			// USB stick can have its lock switch on.
+			diskImage := p.ReadOnly && (fs == "apfs" || fs == "hfs")
+			keep = real && (p.MountPoint == "/" || (strings.HasPrefix(p.MountPoint, "/Volumes/") && !diskImage))
 		case protocol.OSWindows:
 			_, keep = windowsRealFS[fs]
 		}

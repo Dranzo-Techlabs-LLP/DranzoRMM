@@ -16,6 +16,15 @@ public static class PolicyChecks
     public const string Script = "script";
     public const string UnsupportedPrefix = "not supported on this OS";
 
+    /// <summary>
+    /// What an agent reports for a check it does not know (an older agent version). The check was not evaluated, so
+    /// it is stored as unsupported, never as non-compliant: a missing feature is not a compliance failure.
+    /// </summary>
+    public const string UnknownCheckDetail = "unknown check";
+
+    /// <summary>Shown instead of <see cref="UnknownCheckDetail"/> so the cause and the remedy are clear.</summary>
+    public const string UnknownCheckShown = "not supported by this agent version (update the agent)";
+
     /// <summary>Built-in checks and the operating systems they exist on.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> Os = new Dictionary<string, string[]>
     {
@@ -85,7 +94,12 @@ public sealed class PolicyResultHandler(DranzoDbContext db, AlertEngine alerts, 
                 continue;
             }
             var detail = item.Str("detail", 2000);
-            var supported = !detail.StartsWith(PolicyChecks.UnsupportedPrefix, StringComparison.OrdinalIgnoreCase);
+            var unknownCheck = detail.Trim().Equals(PolicyChecks.UnknownCheckDetail, StringComparison.OrdinalIgnoreCase);
+            if (unknownCheck)
+            {
+                detail = PolicyChecks.UnknownCheckShown;
+            }
+            var supported = !unknownCheck && !detail.StartsWith(PolicyChecks.UnsupportedPrefix, StringComparison.OrdinalIgnoreCase);
             var compliant = supported && item.Bool("compliant");
             var row = existing.FirstOrDefault(r => r.PolicyId == policyId);
             if (row is null)

@@ -19,16 +19,16 @@ func fixture(t *testing.T, name string) []byte {
 	return data
 }
 
-// mounts reads a "device|mountpoint|fstype" fixture.
+// mounts reads a "device|mountpoint|fstype[|ro]" fixture.
 func mounts(t *testing.T, name string) []Partition {
 	t.Helper()
 	var parts []Partition
 	for _, line := range strings.Split(strings.TrimSpace(string(fixture(t, name))), "\n") {
-		f := strings.Split(line, "|")
-		if len(f) != 3 {
+		f := strings.Split(strings.TrimRight(line, "\r"), "|")
+		if len(f) != 3 && (len(f) != 4 || f[3] != "ro") {
 			t.Fatalf("bad fixture line %q", line)
 		}
-		parts = append(parts, Partition{Device: f[0], MountPoint: f[1], FSType: f[2]})
+		parts = append(parts, Partition{Device: f[0], MountPoint: f[1], FSType: f[2], ReadOnly: len(f) == 4})
 	}
 	return parts
 }
@@ -67,9 +67,12 @@ func TestDarwinSystemProfiler(t *testing.T) {
 	}
 }
 
+// The sealed system volume "/" is read-only and kept; read-only APFS/HFS volumes
+// under /Volumes are mounted disk images (.dmg) and are not the computer's disks.
 func TestDarwinDiskFilter(t *testing.T) {
 	got := mountPoints(FilterPartitions(protocol.OSMacOS, mounts(t, "darwin_mounts.txt")))
-	want := []string{"/", "/Volumes/Backup", "/Volumes/USB STICK", "/Volumes/Install macOS"}
+	// "Windows Data" is a read-only NTFS disk (macOS cannot write NTFS): kept.
+	want := []string{"/", "/Volumes/Backup", "/Volumes/USB STICK", "/Volumes/Install macOS", "/Volumes/Windows Data"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v", got)
 	}

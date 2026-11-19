@@ -110,6 +110,10 @@ Requested after the first LAN tests: individual system security and firewall, se
 
 An independent review of the server found 8 confirmed issues (2 High, 4 Medium, 2 Low) plus several suspected ones. All are fixed with regression tests; details in `docs/THREAT_MODEL.md` (end).
 
+## Field test 2026-11-19
+
+A full end-to-end run against the production install (rmm.dranzo.com) with one Windows 11 and one macOS 26 device found issues that are now fixed (see CHANGELOG, "Fixes from the 2026-11-19 end-to-end test"): older agents marked non-compliant for checks they do not know, isolation/scan queued for agents that cannot run them, "install" silently upgrading installed software, duplicate macOS vulnerability findings, disk images listed as disks, file-session byte counts, frozen uptime and "Wired" shown without data. **Still open after that test:** the macOS consent prompt fix (notification before the dialog) is not yet verified on a Mac; email/chat alert channels were not configured; UniFi needs a controller; MeshCentral remote desktop is being deployed at mesh.dranzo.com.
+
 ## Needs your environment (cannot be verified here)
 
 - **Windows:** every Windows code path (service, MSI, registry/WMI/WUA, winget, ConPTY, consent dialogs and indicator, BitLocker/Defender checks, signed-PowerShell mode). Build the MSI on Windows and run the walk-through in RUNBOOK §11.

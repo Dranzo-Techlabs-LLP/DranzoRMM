@@ -266,6 +266,31 @@ public class SecurityAlertTests(ServerFixture fx)
     public void Versions_compare_numerically(string a, string b, int expected) => Assert.Equal(expected, VersionCompare.Compare(a, b));
 
     [Fact]
+    public void Mac_installer_receipts_do_not_duplicate_their_app()
+    {
+        static (InstalledSoftware, List<(string Product, bool Full)>) Item(string name, string version, string source, string? packageId)
+        {
+            var s = new InstalledSoftware { Name = name, Version = version, Source = source, PackageId = packageId };
+            return (s, VulnerabilityMatcher.Candidates(name, packageId));
+        }
+        var items = new List<(InstalledSoftware Software, List<(string Product, bool Full)> Candidates)>
+        {
+            Item("Xcode", "26.6", "app", "com.apple.dt.Xcode"),
+            Item("com.apple.pkg.Xcode", "26.6.0.0.1.1781584895", "pkgutil", "com.apple.pkg.Xcode"),
+            // A receipt with no app entry (command-line tools) is still matched.
+            Item("com.example.pkg.ToolChain", "3.1", "pkgutil", "com.example.pkg.ToolChain"),
+            // Same product as an app but an older release: a separate installation, still matched.
+            Item("Python", "3.13.1", "app", "org.python.IDLE"),
+            Item("org.python.Python.PythonFramework-3.9", "3.9.6", "pkgutil", "org.python.python"),
+        };
+        var kept = VulnerabilityMatcher.WithoutReceiptDuplicates(items);
+        Assert.Contains(kept, k => k.Software.Name == "Xcode");
+        Assert.DoesNotContain(kept, k => k.Software.Name == "com.apple.pkg.Xcode" && k.Candidates.Any(c => c.Product == "xcode"));
+        Assert.Contains(kept, k => k.Software.Name == "com.example.pkg.ToolChain" && k.Candidates.Any(c => c.Product == "toolchain"));
+        Assert.Contains(kept, k => k.Software.Name == "org.python.Python.PythonFramework-3.9" && k.Candidates.Any(c => c.Product == "python"));
+    }
+
+    [Fact]
     public async Task Alerts_rules_and_channels_respect_tenant_scope()
     {
         var admin = await fx.AdminAsync();

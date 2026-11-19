@@ -40,7 +40,8 @@ public sealed class LiveSession(Guid id, Guid deviceId, Guid partnerId, Guid org
             {
                 _inputHash.AppendData(data);
             }
-            BytesIn += data.Length;
+            // Interlocked, not just the lock: file transfers add to the same counters outside this lock.
+            Interlocked.Add(ref BytesIn, data.Length);
             return ++_seq;
         }
     }
@@ -204,8 +205,8 @@ public sealed class RemoteSessionService(DranzoDbContext db, SessionRegistry reg
         }
         if (live is not null)
         {
-            session.BytesIn = live.BytesIn;
-            session.BytesOut = live.BytesOut;
+            session.BytesIn = Interlocked.Read(ref live.BytesIn);
+            session.BytesOut = Interlocked.Read(ref live.BytesOut);
             session.InputSha256 = live.Kind == "terminal" ? live.FinishInputHash() : null;
             live.Active = false;
             live.Dispose();

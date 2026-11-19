@@ -1,4 +1,4 @@
-/dev/disk3s1s1|/|apfs
+/dev/disk3s1s1|/|apfs|ro
 devfs|/dev|devfs
 /dev/disk3s6|/System/Volumes/VM|apfs
 /dev/disk3s2|/System/Volumes/Preboot|apfs
@@ -12,3 +12,6 @@ map auto_home|/System/Volumes/Data/home|autofs
 /dev/disk6s2|/Volumes/Backup|hfs
 /dev/disk7s1|/Volumes/USB STICK|msdos
 /dev/disk8s1|/Volumes/Install macOS|apfs
+/dev/disk9s1|/Volumes/Claude|hfs|ro
+/dev/disk10s1|/Volumes/synology-assistant-7.0.7-50095|hfs|ro
+/dev/disk11s1|/Volumes/Windows Data|ntfs|ro

@@ -1,0 +1,14 @@
+
+Start-Date: 2026-11-10  09:12:01
+Commandline: apt-get -y install curl
+Requested-By: admin (1000)
+Install: curl:amd64 (7.88.1-10+deb12u8)
+End-Date: 2026-11-10  09:12:05
+
+Start-Date: 2026-11-11  17:16:20
+Commandline: /usr/bin/unattended-upgrade
+Upgrade: libssl3:amd64 (3.0.15-1~deb12u1, 3.0.20-1~deb12u2), openssl:amd64 (3.0.15-1~deb12u1, 3.0.20-1~deb12u2)
+End-Date: 2026-11-11  17:16:43
+
+Start-Date: 2026-11-12  08:00:00
+Commandline: apt-get -y install tree

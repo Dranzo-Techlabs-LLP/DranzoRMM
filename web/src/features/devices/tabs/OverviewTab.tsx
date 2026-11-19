@@ -4,7 +4,7 @@ import { EmptyState, Panel } from '@/components/page';
 import { RelativeTime } from '@/components/relative-time';
 import { InlineAlert } from '@/components/status';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatBytes, formatDateTime, formatDuration, formatPercent } from '@/lib/format';
+import { currentUptimeSeconds, formatBytes, formatDateTime, formatDuration, formatPercent } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DeviceTabProps } from './registry';
 
@@ -92,6 +92,7 @@ export function OverviewTab({ device }: DeviceTabProps) {
   const network = inv.network ?? [];
   const users = inv.loggedInUsers ?? [];
   const unsupported = inv.unsupported ?? [];
+  const uptime = currentUptimeSeconds(inv.bootTime, inv.uptimeSeconds, device.isOnline);
 
   return (
     <div className="grid gap-4">
@@ -139,7 +140,7 @@ export function OverviewTab({ device }: DeviceTabProps) {
             </Fact>
             <Fact label="Time zone">{inv.timezone}</Fact>
             <Fact label="Uptime">
-              {inv.uptimeSeconds !== undefined ? formatDuration(inv.uptimeSeconds) : null}
+              {uptime !== undefined ? formatDuration(uptime) : null}
               {inv.bootTime ? (
                 <span className="text-muted-foreground"> (started {formatDateTime(inv.bootTime)})</span>
               ) : null}

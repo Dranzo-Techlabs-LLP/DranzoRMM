@@ -55,6 +55,15 @@ public static class IsolationEndpoints
             {
                 return Api.Conflict("This device is revoked.");
             }
+            // Refuse up front rather than queue a job the agent cannot run: an isolation request that silently never
+            // happens is worse than a clear "no" (the technician would believe the device is contained).
+            // The refusal is audited too: an isolation attempt during an incident is a security action whether or not
+            // it could be carried out.
+            if (device.Capabilities.Length > 0 && !device.Capabilities.Contains(JobKinds.NetworkIsolate))
+            {
+                await c.Audit("device.isolate", "failure", device.OrganizationId, id, "device", id, new { reason = CleanText(req.Reason, 500), error = "agent does not support network isolation" }, ct: ct);
+                return Api.Conflict("The agent on this device does not support network isolation. Update the agent first.");
+            }
             if (CleanText(req.Reason, 500) is not { } reason)
             {
                 return Api.BadRequest("Give a reason of up to 500 characters (it is recorded in the audit log).");

@@ -110,7 +110,10 @@ function DeviceView({ device }: { device: DeviceDetail }) {
               device.defaultGateway ? `gateway ${device.defaultGateway}` : null,
             ]
               .filter(Boolean)
-              .join(' · ') || <span className="text-muted-foreground">Wired</span>}
+              .join(' · ') || (
+              // Neither Wi-Fi nor a gateway was reported: older agents send nothing, which is not proof of a cable.
+              <span className="text-muted-foreground">Not reported by the agent</span>
+            )}
           </HeaderFact>
         ) : null}
         <HeaderFact label="Tags">

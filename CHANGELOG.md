@@ -14,6 +14,16 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 - Network discovery: `network.scan` job lists every device a managed computer sees on its local network (IP, MAC, reverse-DNS name, gateway, private-MAC flag); Network > Network devices page with approve/block/forget and bulk actions; new-device alert. Inventory now reports the default gateway and the Wi-Fi connection.
 - Access review: every user and API key with roles, scopes, effective permissions and findings (no MFA, inactive 90+ days, never-expiring keys, full admins). Page under Admin, CSV/PDF report, partner admins only, viewing is audited.
 
+### Fixes from the 2026-11-19 end-to-end test (rmm.dranzo.com, Windows 11 + macOS 26 devices)
+- Policies: a check the agent does not know ("unknown check", older agent) is stored as unsupported with "update the agent", no longer as non-compliant, so it raises no compliance-drift alert and does not lower the score.
+- Isolation and network scan: the server refuses them with a clear 409 when the device's agent does not support them, instead of queuing a job that can never run; the Isolate button is disabled with an explanation for such devices, and the refused attempt is audited.
+- Software deployment: "install" without a version leaves already-installed software unchanged ("already installed; not changed") instead of silently upgrading it (winget, apt). Updates stay in Patches. Held dpkg packages (`hi`) now count as installed.
+- macOS consent prompt: announced in Notification Center with a sound before the dialog, so a dialog behind a full-screen app or on another Space is still noticed. Not yet verified on a Mac.
+- Vulnerabilities: a macOS installer receipt (`com.apple.pkg.*`) no longer duplicates every finding of its app (same product and major.minor version only; an older separate install is still matched).
+- Inventory (macOS): read-only APFS/HFS volumes under /Volumes (mounted disk images) are no longer listed as disks; read-only NTFS and locked USB drives still are.
+- Remote file sessions: uploads and downloads count in the session's bytes in/out.
+- Device page: uptime counts from the boot time while the device is online (no longer frozen at inventory time); "Network" says "Not reported by the agent" instead of "Wired" when nothing was reported.
+
 ### Fixes after first LAN testing
 - Windows: single-PC installer script (`scripts/windows-kit/Install-DranzoAgent.ps1` + double-click `.cmd`) that reports every step.
 - MeshCentral: `Dranzo:Mesh:CertificateSha256` pins a self-signed MeshCentral certificate for MeshAgent downloads (normal validation otherwise).

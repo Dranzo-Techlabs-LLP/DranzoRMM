@@ -206,6 +206,10 @@ public static class NetworkEndpoints
                 {
                     return Api.Conflict("This device is revoked.");
                 }
+                if (device.Capabilities.Length > 0 && !device.Capabilities.Contains(JobKinds.NetworkScan))
+                {
+                    return Api.Conflict("The agent on this device cannot scan the network. Update the agent or choose another device.");
+                }
             }
             else if (req.SiteId is { } siteId)
             {

@@ -39,6 +39,11 @@ export function AgentCard({ device }: { device: DeviceDetail }) {
   const canManage = access.has(P.devicesManage);
   const canRevoke = access.has(P.devicesRevoke);
   const canIsolate = access.has(P.devicesIsolate);
+  // An agent that does not advertise network.isolate cannot be isolated (the server refuses it too). An empty list
+  // means the agent predates capability reporting, so nothing is assumed. Releasing is always offered.
+  const capabilities = device.capabilities ?? [];
+  const isolationUnsupported =
+    !device.isolatedAt && capabilities.length > 0 && !capabilities.includes('network.isolate');
   const revoked = device.status === 'revoked';
   if ((!canManage && !canRevoke && !canIsolate) || revoked) {
     return null;
@@ -55,6 +60,11 @@ export function AgentCard({ device }: { device: DeviceDetail }) {
         device.uninstallCodeSet
           ? 'removing the agent on the computer itself needs the code.'
           : 'an administrator of the computer can remove the agent without a code.'
+      }${
+        // Said in the text, not only in a tooltip: a disabled button shows no tooltip.
+        canIsolate && isolationUnsupported
+          ? ' Isolate is unavailable: this agent version cannot isolate the device. Update the agent first.'
+          : ''
       }`}
       actions={
         <>
@@ -87,6 +97,7 @@ export function AgentCard({ device }: { device: DeviceDetail }) {
               variant="outline"
               size="sm"
               className={device.isolatedAt ? undefined : 'text-destructive hover:text-destructive'}
+              disabled={isolationUnsupported}
               onClick={() => {
                 setDialog('isolate');
               }}

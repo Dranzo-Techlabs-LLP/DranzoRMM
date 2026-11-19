@@ -3,6 +3,7 @@ using System.Text.Json;
 using Dranzo.Api.Features;
 using Dranzo.Domain;
 using Dranzo.Tests.Infra;
+using Microsoft.EntityFrameworkCore;
 
 namespace Dranzo.Tests;
 
@@ -390,6 +391,45 @@ public class NetworkTests(ServerFixture fx)
         var other = await fx.SeedOrgAsync("Iso other " + U);
         var outsider = await fx.CreateUserAsync($"isoout-{U}@example.test", BuiltInRoles.NetworkAdmin, ScopeType.Organization, other.OrgId);
         Assert.Equal(HttpStatusCode.NotFound, (await StepUpThen(outsider, () => outsider.PostAsync($"/api/v1/devices/{pc.DeviceId}/release", new { reason = "x" }))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Older_agent_without_network_features_is_refused_clearly_and_not_marked_non_compliant()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Old agent " + U);
+        await using var old = await TestAgent.EnrollAsync(fx, org.Token, "old-agent", os: "windows", connect: false);
+        // An agent from before network features: no network.* and no firewall.rules support.
+        await old.ConnectAsync(capabilities: ["script", "inventory.refresh", "policy.evaluate", "posture.scan", "reboot"]);
+        await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{old.DeviceId}"), d => d.GetProperty("capabilities").GetArrayLength() == 5);
+
+        var isolate = await StepUpThen(admin, () => admin.PostAsync($"/api/v1/devices/{old.DeviceId}/isolate", new { reason = "test" }));
+        Assert.Equal(HttpStatusCode.Conflict, isolate.StatusCode);
+        Assert.Contains("does not support network isolation", await isolate.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsync("/api/v1/network/scan", new { deviceId = old.DeviceId })).StatusCode);
+        // The refused attempt is audited as a failure and no job was queued.
+        var audit = await admin.GetJsonAsync($"/api/v1/audit?action=device.isolate&organizationId={org.OrgId}");
+        Assert.Equal(1, audit.GetProperty("total").GetInt32());
+        Assert.Equal("failure", audit.GetProperty("items")[0].GetProperty("result").GetString());
+        Assert.Equal(0, await fx.DbAsync(db => db.Jobs.IgnoreQueryFilters().CountAsync(j => j.Kind == JobKinds.NetworkIsolate && j.OrganizationId == org.OrgId)));
+
+        // The agent answers "unknown check" for a check it does not know: stored as unsupported, no drift alert.
+        var policy = (await admin.PostJsonAsync("/api/v1/policies", new { name = "Fw on " + U, check = "firewall.enabled", @params = new { }, organizationId = org.OrgId })).GetProperty("id").GetGuid();
+        await admin.PostJsonAsync($"/api/v1/policies/{policy}/assignments", new { scopeType = "Organization", scopeId = org.OrgId });
+        Assert.True((await admin.PostAsync("/api/v1/policies/evaluate", new { organizationId = org.OrgId })).IsSuccessStatusCode);
+        var job = await old.NextJobAsync("policy.evaluate");
+        await old.CompleteAsync(job, result: new { results = new[] { new { policyId = policy, check = "firewall.enabled", compliant = false, remediated = false, detail = "unknown check" } } });
+        var compliance = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/devices/{old.DeviceId}/compliance"), c => c.GetArrayLength() == 1);
+        Assert.False(compliance[0].GetProperty("supported").GetBoolean());
+        Assert.Contains("update the agent", compliance[0].GetProperty("detail").GetString(), StringComparison.Ordinal);
+        // The org summary counts it as unsupported, not non-compliant, so the device stays compliant (no drift).
+        var summary = await admin.GetJsonAsync($"/api/v1/compliance?organizationId={org.OrgId}");
+        Assert.Equal((1, 1), (summary.GetProperty("devices").GetInt32(), summary.GetProperty("compliantDevices").GetInt32()));
+        var fw = summary.GetProperty("policies").EnumerateArray().Single(p => p.GetProperty("policyId").GetGuid() == policy);
+        Assert.Equal((0, 1), (fw.GetProperty("nonCompliant").GetInt32(), fw.GetProperty("unsupported").GetInt32()));
+        Assert.Equal(0, summary.GetProperty("nonCompliant").GetArrayLength());
+        var alerts = await admin.GetJsonAsync($"/api/v1/alerts?deviceId={old.DeviceId}");
+        Assert.DoesNotContain(alerts.GetProperty("items").EnumerateArray(), a => a.GetProperty("type").GetString() == "compliance.drift");
     }
 
     private static async Task<HttpResponseMessage> StepUpThen(ApiClient client, Func<Task<HttpResponseMessage>> call)

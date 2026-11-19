@@ -180,7 +180,18 @@ public static class RemoteEndpoints
                 return FileFailure(run);
             }
             var blobId = await c.Db.UploadTickets.IgnoreQueryFilters().Where(t => t.Id == ticket.Id && t.PartnerId == c.Who.PartnerId).Select(t => t.BlobId).FirstAsync(ct);
-            return blobId is null ? Api.Error(422, "file_operation_failed", "The device did not upload the file.") : Results.Ok(new { ticketId = ticket.Id, fileName = BlobService.SafeFileName(path), sha256 = sha });
+            if (blobId is null)
+            {
+                return Api.Error(422, "file_operation_failed", "The device did not upload the file.");
+            }
+            // Device -> technician: counted as session output, like terminal output. Blobs have no tenancy filter of
+            // their own (same lookup as the content endpoint below), so the partner predicate is explicit.
+            var size = await c.Db.Blobs.IgnoreQueryFilters().Where(b => b.Id == blobId && b.PartnerId == c.Who.PartnerId).Select(b => b.SizeBytes).FirstOrDefaultAsync(ct);
+            if (registry.Get(id) is { } live)
+            {
+                Interlocked.Add(ref live.BytesOut, size);
+            }
+            return Results.Ok(new { ticketId = ticket.Id, fileName = BlobService.SafeFileName(path), sha256 = sha });
         }).RequirePermission(Permissions.RemoteFiles);
 
         api.MapGet("/sessions/{id:guid}/files/content/{ticketId:guid}", async (Guid id, Guid ticketId, string? fileName, Ctx c, IObjectStore store, HttpContext http, CancellationToken ct) =>
@@ -227,6 +238,11 @@ public static class RemoteEndpoints
             }
             var run = await RunFileJobAsync(c, jobs, session!, JobKinds.FileWrite, new { path = target, blobId = stored.Id, sha256 = stored.Sha256, sizeBytes = stored.SizeBytes, overwrite = overwrite ?? false }, "Upload file", 120, ct);
             await c.Audit("file.upload", run?.Status == JobRunStatus.Succeeded ? "success" : "failure", session!.OrganizationId, session.DeviceId, "remote_session", id, new { path = target, stored.SizeBytes }, stored.Sha256, ct);
+            // Technician -> device: counted as session input, like terminal input.
+            if (run?.Status == JobRunStatus.Succeeded && registry.Get(id) is { } live)
+            {
+                Interlocked.Add(ref live.BytesIn, stored.SizeBytes);
+            }
             return run?.Status == JobRunStatus.Succeeded ? Results.Ok(new { sizeBytes = stored.SizeBytes, sha256 = stored.Sha256 }) : FileFailure(run);
         }).RequirePermission(Permissions.RemoteFiles);
 

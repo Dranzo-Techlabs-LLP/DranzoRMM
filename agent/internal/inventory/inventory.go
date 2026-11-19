@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 
@@ -93,7 +94,7 @@ func disks(ctx context.Context) ([]protocol.DiskInfo, error) {
 	}
 	in := make([]Partition, 0, len(parts))
 	for _, p := range parts {
-		in = append(in, Partition{Device: p.Device, MountPoint: p.Mountpoint, FSType: p.Fstype})
+		in = append(in, Partition{Device: p.Device, MountPoint: p.Mountpoint, FSType: p.Fstype, ReadOnly: slices.Contains(p.Opts, "ro")})
 	}
 	out := []protocol.DiskInfo{}
 	for _, p := range FilterPartitions(platform.OSFamily, in) {

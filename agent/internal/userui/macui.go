@@ -35,6 +35,13 @@ end run`
 
 	// Arguments: title, message, yes label, no label, default label, seconds.
 	// Prints "yes", "no" or "timeout".
+	//
+	// A dialog from a background helper can open behind a full-screen app or
+	// on another Space, where the person never sees it (field test,
+	// 2026-11-19: the request timed out unseen). So the question is also
+	// announced in Notification Center with a sound, which reaches the person
+	// on any Space, before the dialog itself is shown. Both are best effort:
+	// a refused notification must not stop the dialog.
 	macConfirmScript = `on run argv
 	set dlgTitle to item 1 of argv
 	set dlgText to item 2 of argv
@@ -42,6 +49,12 @@ end run`
 	set noLabel to item 4 of argv
 	set defLabel to item 5 of argv
 	set secs to (item 6 of argv) as integer
+	try
+		display notification dlgText with title dlgTitle subtitle "Answer the dialog on screen" sound name "Glass"
+	end try
+	try
+		beep
+	end try
 	try
 		tell me to activate
 	end try

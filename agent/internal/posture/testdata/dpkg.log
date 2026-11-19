@@ -1,0 +1,12 @@
+2026-11-08 14:02:10 startup archives unpack
+2026-11-08 14:02:11 install curl:amd64 <none> 7.88.1-10+deb12u8
+2026-11-08 14:02:11 status half-installed curl:amd64 7.88.1-10+deb12u8
+2026-11-08 14:02:12 status installed curl:amd64 7.88.1-10+deb12u8
+2026-11-09 06:31:40 startup archives unpack
+2026-11-09 06:31:45 upgrade libssl3:amd64 3.0.15-1~deb12u1 3.0.20-1~deb12u2
+2026-11-09 06:31:46 status half-configured libssl3:amd64 3.0.20-1~deb12u2
+2026-11-09 06:31:48 status installed libssl3:amd64 3.0.20-1~deb12u2
+2026-11-10 07:00:00 startup packages remove
+2026-11-10 07:00:01 remove nano:amd64 7.2-1 <none>
+2026-11-10 07:00:02 status config-files nano:amd64 7.2-1
+2026-11-10 07:00:02 status not-installed nano:amd64 <none>

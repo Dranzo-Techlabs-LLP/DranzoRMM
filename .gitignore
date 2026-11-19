@@ -121,6 +121,8 @@ docker-compose.override.yml
 
 # ----- Local databases, logs, dumps -----
 *.log
+# Parser fixtures that are log files (dpkg, apt history) belong in the repository.
+!**/testdata/*.log
 logs/
 *.sqlite
 *.sqlite3

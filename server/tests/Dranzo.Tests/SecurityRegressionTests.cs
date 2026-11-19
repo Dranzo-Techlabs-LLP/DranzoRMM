@@ -106,7 +106,8 @@ public class SecurityRegressionTests(ServerFixture fx)
         using var http = new HttpClient(new SocketsHttpHandler
         {
             SslOptions = new System.Net.Security.SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, c, _, e) => agent.ValidateServer(c, e), ClientCertificates = [stolen] },
-        }) { BaseAddress = new Uri(fx.AgentUrl) };
+        })
+        { BaseAddress = new Uri(fx.AgentUrl) };
         var (_, csr) = TestAgent.NewCsr();
         Assert.Equal(HttpStatusCode.Forbidden, (await http.PostAsJsonAsync("/agent/v1/renew", new { csr })).StatusCode);
         // The real device is unaffected and an alert is raised.

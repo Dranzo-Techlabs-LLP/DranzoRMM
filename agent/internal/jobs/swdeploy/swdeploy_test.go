@@ -2,6 +2,7 @@ package swdeploy_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,10 +182,15 @@ func TestWingetArgv(t *testing.T) {
 }
 
 func TestBrewAlwaysRunsAsConsoleUser(t *testing.T) {
+	installed := false
 	respond := func(c swtest.Call) swtest.Reply {
 		if c.Args[0] == "list" {
+			if !installed {
+				return swtest.Reply{Stderr: "Error: No such keg\n", Exit: 1}
+			}
 			return swtest.Reply{Stdout: "wget 1.24.5\n"}
 		}
+		installed = true
 		return swtest.Reply{Stdout: "==> Pouring wget\n"}
 	}
 	// The agent runs as root, alice is logged in.
@@ -195,6 +201,8 @@ func TestBrewAlwaysRunsAsConsoleUser(t *testing.T) {
 		t.Fatalf("status %s (%s) result %+v", res.Status, res.Message, r)
 	}
 	want := []string{
+		// Asked first: already installed software is left alone.
+		"/opt/homebrew/bin/brew list --versions -- wget",
 		"/opt/homebrew/bin/brew install -- wget",
 		"/opt/homebrew/bin/brew list --versions -- wget",
 	}
@@ -209,11 +217,12 @@ func TestBrewAlwaysRunsAsConsoleUser(t *testing.T) {
 			t.Fatalf("brew must not prompt: %v", c.Env)
 		}
 	}
-	if plat.RanAsUser != 2 {
+	if plat.RanAsUser != 3 {
 		t.Fatalf("RanAsUser = %d", plat.RanAsUser)
 	}
 
 	// Nobody logged in: clear failure, brew is never started.
+	installed = false
 	rec = &swtest.Recorder{Respond: respond}
 	plat = rec.Platform(nil)
 	res, _ = run(t, swdeploy.NewWithEnv(false, macEnv(plat, true)), plat, protocol.SoftwareSpec{Manager: "brew", PackageID: "wget"})
@@ -446,11 +455,18 @@ func TestResultComesFromTheReQuery(t *testing.T) {
 		t.Fatalf("status %s result %+v", res.Status, r)
 	}
 	// A failing index refresh alone does not fail the installation.
+	aptInstalled := false
 	rec = &swtest.Recorder{Respond: func(c swtest.Call) swtest.Reply {
 		if strings.HasSuffix(c.Line(), " update") {
 			return swtest.Reply{Exit: 100}
 		}
+		if strings.Contains(c.Line(), " install -- ") {
+			aptInstalled = true
+		}
 		if strings.HasSuffix(c.Path, "dpkg-query") {
+			if !aptInstalled {
+				return swtest.Reply{Exit: 1}
+			}
 			return swtest.Reply{Stdout: "ii \t1.0\n"}
 		}
 		return swtest.Reply{}
@@ -467,5 +483,66 @@ func TestResultComesFromTheReQuery(t *testing.T) {
 	res = swdeploy.NewWithEnv(false, linuxEnv()).Handle(job.JobContext)
 	if res.Status != protocol.StatusFailed || len(rec.Calls()) != 1 {
 		t.Fatalf("cancelled: status %s, commands %v", res.Status, rec.Lines())
+	}
+}
+
+// Field test 2026-11-19: "install" of a package that was already there
+// silently upgraded it (winget treats install as upgrade). Without a version,
+// an installed package is now left alone and reported as such.
+func TestInstallLeavesAlreadyInstalledSoftwareAlone(t *testing.T) {
+	rec := &swtest.Recorder{Respond: func(c swtest.Call) swtest.Reply {
+		if c.Args[0] == "list" {
+			return swtest.Reply{Stdout: wingetFixture(t, "winget_list_exact.txt")}
+		}
+		t.Errorf("unexpected command: %s", c.Line())
+		return swtest.Reply{}
+	}}
+	res, job := run(t, swdeploy.NewWithEnv(false, windowsEnv()), rec.Platform(nil), protocol.SoftwareSpec{Manager: "winget", PackageID: "7zip.7zip"})
+	r := installResult(t, res)
+	if res.Status != protocol.StatusSucceeded || !r.Installed || r.Version == "" || res.Message != "already installed; not changed" {
+		t.Fatalf("status %s (%s) result %+v", res.Status, res.Message, r)
+	}
+	if got := rec.Lines(); len(got) != 1 || !strings.Contains(got[0], "winget list -e --id 7zip.7zip") {
+		t.Fatalf("commands: %v", got)
+	}
+	if !strings.Contains(job.Out.String(), "already installed") {
+		t.Fatalf("output %q", job.Out.String())
+	}
+
+	// With an explicit version the install still runs (a deliberate version change).
+	rec = &swtest.Recorder{Respond: func(c swtest.Call) swtest.Reply {
+		if c.Args[0] == "list" {
+			return swtest.Reply{Stdout: wingetFixture(t, "winget_list_exact.txt")}
+		}
+		return swtest.Reply{Stdout: "Successfully installed\n"}
+	}}
+	_, _ = run(t, swdeploy.NewWithEnv(false, windowsEnv()), rec.Platform(nil), protocol.SoftwareSpec{Manager: "winget", PackageID: "7zip.7zip", Version: "24.08"})
+	if got := rec.Lines(); len(got) != 2 || !strings.Contains(got[0], "winget install -e --id 7zip.7zip --version 24.08") {
+		t.Fatalf("commands with a version: %v", got)
+	}
+
+	// If the current state cannot be read, the install runs as before and the
+	// output says why.
+	lists := 0
+	rec = &swtest.Recorder{Respond: func(c swtest.Call) swtest.Reply {
+		if c.Args[0] == "list" {
+			lists++
+			if lists == 1 {
+				return swtest.Reply{Err: errors.New("winget is busy")}
+			}
+			return swtest.Reply{Stdout: wingetFixture(t, "winget_list_exact.txt")}
+		}
+		return swtest.Reply{Stdout: "Successfully installed\n"}
+	}}
+	res, job = run(t, swdeploy.NewWithEnv(false, windowsEnv()), rec.Platform(nil), protocol.SoftwareSpec{Manager: "winget", PackageID: "7zip.7zip"})
+	got := rec.Lines()
+	if len(got) != 3 || !strings.Contains(got[0], "winget list -e --id 7zip.7zip") || !strings.Contains(got[1], "winget install -e --id 7zip.7zip") || !strings.Contains(got[2], "winget list -e --id 7zip.7zip") {
+		t.Fatalf("commands when the pre-check fails: %v", got)
+	}
+	if res.Status != protocol.StatusSucceeded || !installResult(t, res).Installed {
+		t.Fatalf("status %s (%s)", res.Status, res.Message)
+	}
+	if !strings.Contains(job.Out.String(), "Could not check whether 7zip.7zip is already installed") {
+		t.Fatalf("output %q", job.Out.String())
 	}
 }

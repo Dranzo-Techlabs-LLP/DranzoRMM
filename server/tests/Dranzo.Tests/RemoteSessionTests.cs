@@ -260,6 +260,10 @@ public class RemoteSessionTests(ServerFixture fx)
 
         await admin.PostAsync($"/api/v1/sessions/{sessionId}/end");
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsync($"/api/v1/sessions/{sessionId}/files/list", new { path = "/etc" })).StatusCode);
+
+        // The session record counts the transferred bytes: device -> technician (download) as out, upload as in.
+        var ended = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/sessions/{sessionId}"), x => x.GetProperty("state").GetString() == "ended");
+        Assert.Equal(((long)content.Length, (long)payload.Length), (ended.GetProperty("bytesOut").GetInt64(), ended.GetProperty("bytesIn").GetInt64()));
     }
 
     [Fact]

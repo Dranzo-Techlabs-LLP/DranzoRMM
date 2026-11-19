@@ -181,6 +181,48 @@ public sealed partial class VulnerabilityMatcher(DranzoDbContext db, TimeProvide
         return [.. result.Where(c => c.Item1.Length >= 2).Distinct()];
     }
 
+    /// <summary>
+    /// macOS lists an application twice: once as the app bundle ("Xcode" 26.6, source <c>app</c>) and once as the
+    /// installer receipt ("com.apple.pkg.Xcode" 26.6.0.0.1..., source <c>pkgutil</c>). Matching both reports every CVE
+    /// twice. A receipt candidate is dropped only when an <c>app</c> entry has the same product AND the same
+    /// major.minor version, i.e. it is the same installation. A receipt whose version differs (an older framework or
+    /// command-line tool that shares a product name with a newer app) is still matched, so a real finding is not hidden.
+    /// </summary>
+    public static List<(InstalledSoftware Software, List<(string Product, bool Full)> Candidates)> WithoutReceiptDuplicates(
+        List<(InstalledSoftware Software, List<(string Product, bool Full)> Candidates)> items)
+    {
+        var apps = new Dictionary<string, List<long[]>>();
+        foreach (var (s, candidates) in items.Where(x => x.Software.Source == "app"))
+        {
+            var v = VersionCompare.Parse(s.Version);
+            foreach (var (product, _) in candidates)
+            {
+                if (!apps.TryGetValue(product, out var list))
+                {
+                    apps[product] = list = [];
+                }
+                list.Add(v);
+            }
+        }
+        static bool SameRelease(long[] a, long[] b) => a.Length >= 2 && b.Length >= 2 && a[0] == b[0] && a[1] == b[1];
+        var result = new List<(InstalledSoftware, List<(string, bool)>)>(items.Count);
+        foreach (var (s, candidates) in items)
+        {
+            if (s.Source != "pkgutil")
+            {
+                result.Add((s, candidates));
+                continue;
+            }
+            var receipt = VersionCompare.Parse(s.Version);
+            var remaining = candidates.Where(c => !(apps.TryGetValue(c.Product, out var versions) && versions.Any(v => SameRelease(v, receipt)))).ToList();
+            if (remaining.Count > 0)
+            {
+                result.Add((s, remaining));
+            }
+        }
+        return result;
+    }
+
     public async Task<int> MatchDeviceAsync(Guid deviceId, CancellationToken ct)
     {
         var device = await db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Id == deviceId, ct);
@@ -193,6 +235,7 @@ public sealed partial class VulnerabilityMatcher(DranzoDbContext db, TimeProvide
         var found = new Dictionary<(string, string), DeviceVulnerability>();
         var bySoftware = software.Where(s => !SkippedSources.Contains(s.Source) && s.Version.Length > 0)
             .Select(s => (Software: s, Candidates: Candidates(s.Name, s.PackageId))).Where(x => x.Candidates.Count > 0).ToList();
+        bySoftware = WithoutReceiptDuplicates(bySoftware);
         var allProducts = bySoftware.SelectMany(x => x.Candidates.Select(c => c.Product)).Distinct().ToArray();
         if (allProducts.Length > 0)
         {
@@ -298,7 +341,7 @@ public sealed class VulnerabilityFeedService(IServiceScopeFactory scopes, ILogge
             while (from < now)
             {
                 var to = from.AddDays(119) < now ? from.AddDays(119) : now;
-                for (var start = 0; ; )
+                for (var start = 0; ;)
                 {
                     var url = $"{feeds.NvdUrl}?lastModStartDate={Uri.EscapeDataString(from.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.000Z"))}&lastModEndDate={Uri.EscapeDataString(to.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.000Z"))}&resultsPerPage=2000&startIndex={start}";
                     using var request = new HttpRequestMessage(HttpMethod.Get, url);

@@ -222,7 +222,10 @@ func TestParseDpkgQuery(t *testing.T) {
 	if s := ParseDpkgStatus("ii \t5.2.15-2+b13\n"); !s.Installed || s.Version != "5.2.15-2+b13" {
 		t.Fatalf("status = %+v", s)
 	}
-	for _, out := range []string{"", "rc \t1.0\n", "un \t\n", "dpkg-query: no packages found matching x\n"} {
+	if s := ParseDpkgStatus("hi \t1.2.3\n"); !s.Installed || s.Version != "1.2.3" {
+		t.Fatalf("held package: status = %+v", s)
+	}
+	for _, out := range []string{"", "rc \t1.0\n", "un \t\n", "pn \t\n", "dpkg-query: no packages found matching x\n"} {
 		if s := ParseDpkgStatus(out); s.Installed {
 			t.Errorf("%q reported installed", out)
 		}

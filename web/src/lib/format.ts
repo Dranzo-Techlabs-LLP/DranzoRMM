@@ -82,6 +82,24 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${m}m`;
 }
 
+/**
+ * Uptime as of now, not as of the last inventory: the reported `uptimeSeconds` is frozen at collection time (a device
+ * that rebooted shortly before an inventory showed "0m" for hours). While the device is online, count from its boot
+ * time; when it is offline, the reported value is the last thing known.
+ */
+export function currentUptimeSeconds(
+  bootTime: string | null | undefined,
+  reported: number | null | undefined,
+  online: boolean,
+  now = Date.now(),
+): number | undefined {
+  const boot = bootTime ? Date.parse(bootTime) : Number.NaN;
+  if (online && Number.isFinite(boot) && boot <= now) {
+    return Math.floor((now - boot) / 1000);
+  }
+  return reported ?? undefined;
+}
+
 export function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return '';

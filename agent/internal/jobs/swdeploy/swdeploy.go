@@ -264,6 +264,30 @@ func (h *Handler) Handle(jc *jobs.JobContext) jobs.Result {
 		return jobs.FromError(err)
 	}
 
+	// "Install" without a version on software that is already there must not
+	// change it: winget and apt treat install as upgrade, which silently
+	// replaced a user's version during the 2026-11-19 field test. Upgrades
+	// belong to the patch workflow, where they are approved and scheduled.
+	// If the state cannot be read, fall through to the normal install.
+	if !h.uninstall && spec.Version == "" && jc.Ctx.Err() == nil {
+		pctx, pcancel := context.WithTimeout(jc.Ctx, 2*time.Minute)
+		before, perr := query(pctx)
+		pcancel()
+		if perr != nil && jc.Ctx.Err() == nil {
+			fmt.Fprintf(jc.Stdout, "Could not check whether %s is already installed (%v); installing anyway.\n", spec.PackageID, perr)
+		}
+		if perr == nil && before.Installed {
+			fmt.Fprintf(jc.Stdout, "%s is already installed (version %s); nothing was changed. Use Patches to update it.\n", spec.PackageID, displayVersion(before.Version))
+			unchanged := 0
+			return jobs.Result{
+				Status:   protocol.StatusSucceeded,
+				Message:  "already installed; not changed",
+				Result:   protocol.InstallResult{Installed: true, Version: before.Version},
+				ExitCode: &unchanged,
+			}
+		}
+	}
+
 	exit := 0
 	for _, s := range steps {
 		fmt.Fprintf(jc.Stdout, "> %s %s\n", toolName(s.cmd.Path), strings.Join(s.cmd.Args, " "))
@@ -311,6 +335,13 @@ func (h *Handler) Handle(jc *jobs.JobContext) jobs.Result {
 		res.Status = protocol.StatusSucceeded
 	}
 	return res
+}
+
+func displayVersion(v string) string {
+	if v == "" {
+		return "unknown"
+	}
+	return v
 }
 
 func toolName(path string) string {
