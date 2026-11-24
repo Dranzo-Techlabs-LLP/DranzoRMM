@@ -292,7 +292,8 @@ public class RemoteSessionTests(ServerFixture fx)
         var url = new Uri((await admin.GetJsonAsync($"/api/v1/sessions/{sessionId}/desktop-url")).GetProperty("url").GetString()!);
         Assert.Equal("mesh.example.test", url.Host);
         var query = System.Web.HttpUtility.ParseQueryString(url.Query);
-        Assert.Equal(nodeId, query["gotonode"]);
+        // MeshCentral's web app prefixes "node/<domain>/" itself; the full id opened no device (field test 2026-11-24).
+        Assert.Equal(new string('a', 64), query["gotonode"]);
         var token = JsonDocument.Parse(MeshCentral.DecodeToken(query["login"]!, ServerFixture.MeshTestKey)!).RootElement;
         Assert.Equal("user//org-" + org.OrgId.ToString("N")[..6], token.GetProperty("u").GetString());
         Assert.True(token.GetProperty("expire").GetInt32() <= 5);
