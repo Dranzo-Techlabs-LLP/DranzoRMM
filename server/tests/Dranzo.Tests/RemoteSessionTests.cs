@@ -280,7 +280,9 @@ public class RemoteSessionTests(ServerFixture fx)
 
         // The MeshAgent is not installed yet.
         Assert.Equal(HttpStatusCode.Conflict, (await admin.GetAsync($"/api/v1/sessions/{sessionId}/desktop-url")).StatusCode);
-        var nodeId = "node//" + new string('a', 64);
+        // Real MeshCentral ids contain '@' and '$' (URL-safe base64).
+        var shortNodeId = "Yh45Xgn0Pq0gD8y23mSCjzgSHBm$UNnm6LDg9Krh4BAKPHdnk7ibcA1TxPfVr8z@";
+        var nodeId = "node//" + shortNodeId;
         await fx.DbAsync(db => db.Devices.Where(d => d.Id == agent.DeviceId).ExecuteUpdateAsync(s => s.SetProperty(d => d.MeshNodeId, nodeId)));
         // Installed, but the organization has no dedicated MeshCentral account: refused rather than using a shared login.
         var refused = await admin.GetAsync($"/api/v1/sessions/{sessionId}/desktop-url");
@@ -292,8 +294,10 @@ public class RemoteSessionTests(ServerFixture fx)
         var url = new Uri((await admin.GetJsonAsync($"/api/v1/sessions/{sessionId}/desktop-url")).GetProperty("url").GetString()!);
         Assert.Equal("mesh.example.test", url.Host);
         var query = System.Web.HttpUtility.ParseQueryString(url.Query);
-        // MeshCentral's web app prefixes "node/<domain>/" itself; the full id opened no device (field test 2026-11-24).
-        Assert.Equal(new string('a', 64), query["gotonode"]);
+        // MeshCentral's web app prefixes "node/<domain>/" itself and does not URL-decode the value: the full id or a
+        // percent-encoded one opened no device (field test 2026-11-24).
+        Assert.Equal(shortNodeId, query["gotonode"]);
+        Assert.Contains("&gotonode=" + shortNodeId + "&", url.OriginalString, StringComparison.Ordinal);
         var token = JsonDocument.Parse(MeshCentral.DecodeToken(query["login"]!, ServerFixture.MeshTestKey)!).RootElement;
         Assert.Equal("user//org-" + org.OrgId.ToString("N")[..6], token.GetProperty("u").GetString());
         Assert.True(token.GetProperty("expire").GetInt32() <= 5);

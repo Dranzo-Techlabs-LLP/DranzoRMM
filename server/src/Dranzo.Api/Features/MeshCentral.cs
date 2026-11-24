@@ -93,11 +93,21 @@ public sealed class MeshCentral(IOptions<DranzoOptions> options, IHttpClientFact
 
     /// <summary>
     /// The MeshCentral link that opens the device's desktop. MeshCentral's web app looks the device up as
-    /// "node/&lt;domain&gt;/" + gotonode, so only the part after the last '/' is passed; the full node id opened MeshCentral
-    /// with no device selected ("Disconnected", Connect greyed out), found in the 2026-11-24 field test.
+    /// "node/&lt;domain&gt;/" + gotonode and reads query values without URL-decoding them, so gotonode is only the part
+    /// after the last '/', and it is not percent-encoded: node ids use MeshCentral's URL-safe base64 ('@' and '$'
+    /// instead of '+' and '/'), and "%40"/"%24" never matched. Either mistake opened MeshCentral with no device selected
+    /// ("Disconnected", Connect greyed out), found in the 2026-11-24 field test. Anything outside that alphabet is
+    /// refused rather than passed on.
     /// </summary>
-    public string DesktopUrl(string nodeId, string meshUser) =>
-        $"{Opt.Url!.TrimEnd('/')}/?login={Uri.EscapeDataString(LoginToken(meshUser))}&gotonode={Uri.EscapeDataString(nodeId[(nodeId.LastIndexOf('/') + 1)..])}&viewmode=11&hide=31";
+    public string DesktopUrl(string nodeId, string meshUser)
+    {
+        var shortId = nodeId[(nodeId.LastIndexOf('/') + 1)..];
+        if (shortId.Length == 0 || !shortId.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '@' or '$' or '-' or '_'))
+        {
+            throw new InvalidOperationException("The device's MeshCentral node id is not valid.");
+        }
+        return $"{Opt.Url!.TrimEnd('/')}/?login={Uri.EscapeDataString(LoginToken(meshUser))}&gotonode={shortId}&viewmode=11&hide=31";
+    }
 
     /// <summary>Fetches the MeshAgent installer for a device from the MeshCentral server.</summary>
     public async Task<(Stream Content, string FileName)> DownloadAgentAsync(string os, string arch, string meshGroupId, CancellationToken ct)
