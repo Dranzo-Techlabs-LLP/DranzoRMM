@@ -98,6 +98,41 @@ public class SecurityAlertTests(ServerFixture fx)
     }
 
     [Fact]
+    public void Last_update_is_the_later_of_a_DranzoRMM_install_and_the_date_the_os_reports()
+    {
+        var os = DateTimeOffset.Parse("2026-11-24T07:34:04Z");
+        var dranzo = DateTimeOffset.Parse("2026-10-01T00:00:00Z");
+        Assert.Equal(os, SecurityEndpoints.LatestPatchDate(null, """{"lastPatchDate":"2026-11-24T07:34:04Z"}"""));
+        Assert.Equal(os, SecurityEndpoints.LatestPatchDate(dranzo, """{"lastPatchDate":"2026-11-24T07:34:04Z"}"""));
+        Assert.Equal(os, SecurityEndpoints.LatestPatchDate(os, """{"lastPatchDate":"2026-10-01T00:00:00Z"}"""));
+        Assert.Equal(dranzo, SecurityEndpoints.LatestPatchDate(dranzo, null));
+        Assert.Equal(dranzo, SecurityEndpoints.LatestPatchDate(dranzo, "not json"));
+        Assert.Null(SecurityEndpoints.LatestPatchDate(null, """{"lastPatchDate":null}"""));
+        Assert.Null(SecurityEndpoints.LatestPatchDate(null, """{"lastPatchDate":"soon"}"""));
+        Assert.Null(SecurityEndpoints.LatestPatchDate(null, "[]"));
+    }
+
+    [Fact]
+    public async Task Security_summary_shows_the_last_update_the_device_reports()
+    {
+        var admin = await fx.AdminAsync();
+        var org = await fx.SeedOrgAsync("Patch " + U);
+        await using var agent = await TestAgent.EnrollAsync(fx, org.Token, "patch-host", os: "windows");
+        await agent.SendAsync("posture", new
+        {
+            collectedAt = DateTimeOffset.UtcNow,
+            firewall = new { enabled = true, detail = "" },
+            localAdmins = new[] { "Administrator" },
+            lastPatchDate = "2026-11-24T07:34:04Z",
+            pendingReboot = false, listeningPorts = Array.Empty<object>(), unsupported = Array.Empty<string>(),
+        });
+        var summary = await UntilAsync(() => admin.GetJsonAsync($"/api/v1/security/posture?organizationId={org.OrgId}"),
+            s => s.GetProperty("items").EnumerateArray().Any(i => i.GetProperty("collectedAt").ValueKind != JsonValueKind.Null));
+        var item = summary.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == agent.DeviceId);
+        Assert.Equal(DateTimeOffset.Parse("2026-11-24T07:34:04Z"), item.GetProperty("lastPatchDate").GetDateTimeOffset());
+    }
+
+    [Fact]
     public async Task Full_disk_offline_device_firewall_encryption_and_new_admin_raise_alerts()
     {
         var admin = await fx.AdminAsync();

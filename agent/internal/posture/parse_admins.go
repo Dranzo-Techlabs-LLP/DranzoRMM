@@ -185,7 +185,12 @@ func ParseDsclGroupMembership(out string) ([]AdminAccount, error) {
 			continue
 		}
 		seen[name] = true
-		admins = append(admins, AdminAccount{Name: name, Builtin: name == "root", Groups: []string{"admin"}})
+		// Names starting with "_" are macOS system accounts that cannot log in
+		// (_mbsetupuser: Setup Assistant, added to the admin group by macOS
+		// itself). Like root they are built in, not people to approve or remove
+		// (field test 2026-11-24 flagged _mbsetupuser as an unexpected admin).
+		builtin := name == "root" || strings.HasPrefix(name, "_")
+		admins = append(admins, AdminAccount{Name: name, Builtin: builtin, Groups: []string{"admin"}})
 	}
 	sortAdmins(admins)
 	return admins, nil

@@ -29,8 +29,16 @@ foreach ($r in $rules) {
 'ok'`
 
 // PSListRules prints the DranzoRMM rule names, one per line.
+//
+// With no DranzoRMM rules Get-NetFirewallRule reports "No MSFT_NetFirewallRule
+// objects found". -ErrorAction SilentlyContinue hides the message but still
+// marks the statement as failed, and "powershell -Command -" exits with 1 when
+// the LAST statement failed, so the result is collected first and printed by a
+// separate statement (field test 2026-11-24: every firewall-rules check on a
+// PC without DranzoRMM rules failed with "exit code 1").
 const PSListRules = `$ErrorActionPreference = 'Stop'
-Get-NetFirewallRule -Group 'DranzoRMM' -ErrorAction SilentlyContinue | ForEach-Object { 'dranzo:' + ($_.Name -replace '^DranzoRMM-', '') }`
+$rules = @(Get-NetFirewallRule -Group 'DranzoRMM' -ErrorAction SilentlyContinue)
+$rules | ForEach-Object { 'dranzo:' + ($_.Name -replace '^DranzoRMM-', '') }`
 
 // PSIsolate replaces the "DranzoRMM Isolation" rules with two block rules (in
 // and out) for every address except the allowed ones. $env:DRANZO_ISO_V4 and

@@ -373,7 +373,8 @@ func TestParseWindowsAdmins(t *testing.T) {
 func TestParseDsclGroupMembership(t *testing.T) {
 	got, err := ParseDsclGroupMembership("GroupMembership: root alice _mbsetupuser alice\n")
 	want := []AdminAccount{
-		{Name: "_mbsetupuser", Groups: []string{"admin"}},
+		// macOS system account (Setup Assistant): built in, never an "unexpected" admin.
+		{Name: "_mbsetupuser", Builtin: true, Groups: []string{"admin"}},
 		{Name: "alice", Groups: []string{"admin"}},
 		{Name: "root", Builtin: true, Groups: []string{"admin"}},
 	}

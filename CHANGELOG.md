@@ -27,6 +27,11 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 - Remote file sessions: uploads and downloads count in the session's bytes in/out.
 - Device page: uptime counts from the boot time while the device is online (no longer frozen at inventory time); "Network" says "Not reported by the agent" instead of "Wired" when nothing was reported.
 
+### Fixes from the 2026-11-24 end-to-end test (fresh installs from the setup kits, Windows 11 + macOS 26)
+- Firewall rule policies (Windows): every `firewall.rules` check failed with "powershell.exe: exit code 1" and no rule was ever created. Windows PowerShell run with `-Command -` exits 1 when its last statement reported an error, even one suppressed with `-ErrorAction SilentlyContinue`, so listing DranzoRMM's rules failed whenever there were none yet. The list script now captures the lookup and ends with a statement that cannot fail (agent 0.1.4); a test keeps every Windows firewall script from ending on a failable lookup.
+- Local administrators (macOS): `_mbsetupuser`, the account macOS uses during Setup Assistant, was reported as a non-built-in administrator, so a "no extra local admins" policy failed on every Mac. macOS system accounts (`root` and names starting with `_`) are now marked built-in (agent 0.1.4).
+- Security page: "Last update" showed "Unknown" for every device patched by Windows Update or macOS itself, because only installs made through DranzoRMM were used. It now shows the later of that and the last-update date the device reports.
+
 ### Fixes after first LAN testing
 - Windows: single-PC installer script (`scripts/windows-kit/Install-DranzoAgent.ps1` + double-click `.cmd`) that reports every step.
 - MeshCentral: `Dranzo:Mesh:CertificateSha256` pins a self-signed MeshCentral certificate for MeshAgent downloads (normal validation otherwise).

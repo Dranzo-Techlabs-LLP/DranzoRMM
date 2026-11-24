@@ -60,6 +60,33 @@ public sealed class PostureProcessor(DranzoDbContext db, AlertEngine alerts, Tim
 
 public static class SecurityEndpoints
 {
+    /// <summary>
+    /// The device's last update: the later of an install through DranzoRMM and the date the operating system itself
+    /// reports in posture ("lastPatchDate"). Using only the DranzoRMM install date showed "Unknown" for every device
+    /// that is patched by Windows Update or macOS on its own (field test 2026-11-24).
+    /// </summary>
+    public static DateTimeOffset? LatestPatchDate(DateTimeOffset? installedByDranzo, string? postureJson)
+    {
+        DateTimeOffset? reported = null;
+        if (!string.IsNullOrEmpty(postureJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(postureJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("lastPatchDate", out var v) && v.ValueKind == JsonValueKind.String
+                    && DateTimeOffset.TryParse(v.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
+                {
+                    reported = parsed;
+                }
+            }
+            catch (JsonException)
+            {
+                // A malformed snapshot only loses the reported date.
+            }
+        }
+        return installedByDranzo is { } a && reported is { } b ? (a > b ? a : b) : installedByDranzo ?? reported;
+    }
+
     public static void Map(RouteGroupBuilder api)
     {
         api.MapGet("/security/posture", async (Guid? organizationId, Ctx c, CancellationToken ct) =>
@@ -67,7 +94,7 @@ public static class SecurityEndpoints
             var devices = await c.Db.Devices.AsNoTracking().Where(d => d.Status == DeviceStatus.Active && (organizationId == null || d.OrganizationId == organizationId))
                 .Select(d => new { d.Id, d.Hostname, d.OrganizationId, d.Os, d.IsOnline, d.PendingReboot, d.LastPatchInstallAt }).ToListAsync(ct);
             var posture = await c.Db.PostureSnapshots.AsNoTracking().Where(p => p.IsLatest && (organizationId == null || p.OrganizationId == organizationId))
-                .Select(p => new { p.DeviceId, p.CollectedAt, p.AntivirusOk, p.FirewallOk, p.EncryptionOk, p.LocalAdmins }).ToDictionaryAsync(p => p.DeviceId, ct);
+                .Select(p => new { p.DeviceId, p.CollectedAt, p.AntivirusOk, p.FirewallOk, p.EncryptionOk, p.LocalAdmins, p.DataJson }).ToDictionaryAsync(p => p.DeviceId, ct);
             var vulns = await c.Db.DeviceVulnerabilities.AsNoTracking().Where(v => organizationId == null || v.OrganizationId == organizationId)
                 .GroupBy(v => v.DeviceId).Select(g => new { DeviceId = g.Key, Total = g.Count(), Kev = g.Count(x => x.KnownExploited), Critical = g.Count(x => x.Severity == "critical") }).ToDictionaryAsync(x => x.DeviceId, ct);
             var scoreInputs = await SecurityScore.LoadAsync(c.Db, organizationId, null, ct);
@@ -79,7 +106,7 @@ public static class SecurityEndpoints
                 return new
                 {
                     score = score?.Score, grade = score?.Grade ?? "?",
-                    d.Id, d.Hostname, d.OrganizationId, d.Os, d.IsOnline, d.PendingReboot, lastPatchDate = d.LastPatchInstallAt, collectedAt = p?.CollectedAt,
+                    d.Id, d.Hostname, d.OrganizationId, d.Os, d.IsOnline, d.PendingReboot, lastPatchDate = LatestPatchDate(d.LastPatchInstallAt, p?.DataJson), collectedAt = p?.CollectedAt,
                     antivirusOk = p?.AntivirusOk, firewallOk = p?.FirewallOk, encryptionOk = p?.EncryptionOk, localAdmins = p?.LocalAdmins ?? [],
                     vulnerabilities = v?.Total ?? 0, knownExploited = v?.Kev ?? 0, criticalVulnerabilities = v?.Critical ?? 0,
                 };
