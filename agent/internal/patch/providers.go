@@ -825,7 +825,8 @@ func (p *WUAProvider) Check(context.Context) error {
 }
 
 func (p *WUAProvider) command(script string, env []string) platform.Command {
-	return platform.Command{Path: p.Lookup("powershell"), Args: PowerShellArgs, Env: env, Stdin: strings.NewReader(script)}
+	// The blank line makes "-Command -" run a final multi-line statement (see posture.PowerShell).
+	return platform.Command{Path: p.Lookup("powershell"), Args: PowerShellArgs, Env: env, Stdin: strings.NewReader(strings.TrimRight(script, "\r\n") + "\n\n")}
 }
 
 // Scan implements Provider.

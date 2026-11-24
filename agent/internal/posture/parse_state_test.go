@@ -707,7 +707,14 @@ func TestPowerShellScripts(t *testing.T) {
 	// The invocation: script on stdin, never on the command line.
 	cmd := PowerShell(PSFirewall, "A=b")
 	wantArgs := []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "-"}
-	if !reflect.DeepEqual(cmd.Args, wantArgs) || cmd.Stdin != PSFirewall || !reflect.DeepEqual(cmd.Env, []string{"A=b"}) ||
+	// A blank line ends the input: "-Command -" drops a final multi-line statement without it.
+	if !strings.HasPrefix(cmd.Stdin, strings.TrimRight(PSFirewall, "\n")) || !strings.HasSuffix(cmd.Stdin, "\n\n") || strings.HasSuffix(cmd.Stdin, "\n\n\n") {
+		t.Errorf("stdin must be the script plus one blank line: %q", cmd.Stdin[max(0, len(cmd.Stdin)-20):])
+	}
+	if got := PowerShellStdin("a |\n  b"); got != "a |\n  b\n\n" {
+		t.Errorf("PowerShellStdin = %q", got)
+	}
+	if !reflect.DeepEqual(cmd.Args, wantArgs) || cmd.Stdin != PowerShellStdin(PSFirewall) || !reflect.DeepEqual(cmd.Env, []string{"A=b"}) ||
 		!strings.HasSuffix(cmd.Path, `\System32\WindowsPowerShell\v1.0\powershell.exe`) || cmd.Timeout != PowerShellTimeout {
 		t.Errorf("PowerShell(): %+v", cmd)
 	}

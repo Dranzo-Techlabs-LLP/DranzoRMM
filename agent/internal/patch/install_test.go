@@ -227,7 +227,7 @@ func TestScannerWindows(t *testing.T) {
 		t.Fatalf("vcredist = %+v", vc)
 	}
 	ps := rec.Calls()[0]
-	if strings.Join(ps.Args, " ") != "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -" || ps.Stdin != wuaScanScript {
+	if strings.Join(ps.Args, " ") != "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -" || ps.Stdin != strings.TrimRight(wuaScanScript, "\r\n")+"\n\n" {
 		t.Fatalf("powershell call = %+v", ps)
 	}
 	if got := rec.Lines()[1]; got != "/fake/bin/winget upgrade --accept-source-agreements --disable-interactivity" {
@@ -709,7 +709,7 @@ func TestWUAInstallRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := rec.Calls()[0]
-	if c.Stdin != wuaInstallScript || !c.HasEnv("DRANZO_WUA_ALL=0") || !c.HasEnv("DRANZO_WUA_IDS=3f0a2d6c-1b7e-4c55-9e0a-6d2c9b1f7a11,11111111-2222-3333-4444-555555555555") {
+	if c.Stdin != strings.TrimRight(wuaInstallScript, "\r\n")+"\n\n" || !c.HasEnv("DRANZO_WUA_ALL=0") || !c.HasEnv("DRANZO_WUA_IDS=3f0a2d6c-1b7e-4c55-9e0a-6d2c9b1f7a11,11111111-2222-3333-4444-555555555555") {
 		t.Fatalf("call = %+v", c)
 	}
 	if !out.RebootRequired || len(out.Items) != 4 || out.Items[0].OK {

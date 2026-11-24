@@ -228,12 +228,25 @@ func PowerShellPath() string {
 // "-ExecutionPolicy Bypass" applies to this one process only (it is not a
 // system setting): the built-in NetSecurity, Defender and BitLocker modules
 // are script modules, which a "Restricted" policy would refuse to load.
+//
+// "-Command -" reads stdin like an interactive prompt: a statement that spans
+// lines (a pipeline continued with "|", a foreach or if block) is only run
+// once a blank line follows, and is silently dropped at end of input. The
+// script is therefore always terminated with a blank line. Without it the
+// multi-line network scan, gateway, firewall-rule and isolation scripts did
+// nothing on Windows (field test 2026-11-19).
 func PowerShell(script string, env ...string) Cmd {
 	return Cmd{
 		Path:    PowerShellPath(),
 		Args:    []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "-"},
-		Stdin:   script,
+		Stdin:   PowerShellStdin(script),
 		Env:     env,
 		Timeout: PowerShellTimeout,
 	}
+}
+
+// PowerShellStdin is the text fed to "powershell -Command -" for script: the
+// script followed by a blank line, so a final multi-line statement runs.
+func PowerShellStdin(script string) string {
+	return strings.TrimRight(script, "\r\n") + "\n\n"
 }
