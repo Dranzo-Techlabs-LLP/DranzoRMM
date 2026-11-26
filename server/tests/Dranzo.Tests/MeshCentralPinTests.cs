@@ -43,6 +43,23 @@ public sealed class MeshCentralPinTests
         Assert.Throws<InvalidOperationException>(() => MeshCentral.CreateHandler(pin));
 
     [Fact]
+    public void MeshAgent_settings_must_name_the_server_and_the_group()
+    {
+        // Shaped like MeshCentral 1.1.44's /meshsettings answer (CRLF, leading blank line, translations).
+        const string real = "\r\nMeshName=World Happiness Code\r\nMeshType=2\r\nMeshID=0xF529A416D16FECCA\r\nServerID=ABCDEF\r\nMeshServer=wss://mesh.dranzo.com:443/agent.ashx\r\ntranslation={\"en\":{}}\r\n";
+        Assert.True(MeshCentral.IsValidSettings(real));
+        Assert.True(MeshCentral.IsValidSettings("MeshID=0x01\nMeshServer=local\n"));
+        Assert.False(MeshCentral.IsValidSettings(null));
+        Assert.False(MeshCentral.IsValidSettings(""));
+        Assert.False(MeshCentral.IsValidSettings("<html>Login</html>"));
+        Assert.False(MeshCentral.IsValidSettings("MeshID=0x01\r\n"));
+        Assert.False(MeshCentral.IsValidSettings("MeshServer=wss://mesh.dranzo.com/agent.ashx\r\n"));
+        Assert.False(MeshCentral.IsValidSettings("MeshID=0x\r\nMeshServer=wss://mesh.dranzo.com/agent.ashx\r\n"));
+        Assert.False(MeshCentral.IsValidSettings(real + "\0"));
+        Assert.False(MeshCentral.IsValidSettings(real + new string('x', MeshCentral.MaxSettingsBytes)));
+    }
+
+    [Fact]
     public void Colon_separated_pin_is_accepted()
     {
         using var cert = SelfSigned("mesh");

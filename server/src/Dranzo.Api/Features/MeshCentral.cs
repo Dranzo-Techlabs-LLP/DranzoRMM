@@ -123,6 +123,45 @@ public sealed class MeshCentral(IOptions<DranzoOptions> options, IHttpClientFact
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadAsStreamAsync(ct), os == "windows" ? "meshagent.exe" : "meshagent");
     }
+
+    /// <summary>Largest settings file accepted (MeshCentral's is about 32 KB, mostly installer translations).</summary>
+    public const int MaxSettingsBytes = 256 * 1024;
+
+    /// <summary>
+    /// Fetches the device group's MeshAgent settings file (meshagent.msh: server address, group and server identity).
+    /// MeshCentral builds it into the Windows executable, but sends the macOS and Linux binaries without it
+    /// (webserver.js: plain file unless the platform is win32), so on those systems the MeshAgent installed but never
+    /// connected. Found on the World Happiness Code Mac, 2026-11-26.
+    /// </summary>
+    public async Task<string> DownloadSettingsAsync(string meshGroupId, CancellationToken ct)
+    {
+        var url = $"{Opt.Url!.TrimEnd('/')}/meshsettings?id={Uri.EscapeDataString(meshGroupId)}";
+        var client = http.CreateClient(HttpClientName);
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        var buffer = new byte[MaxSettingsBytes + 1];
+        var read = 0;
+        int n;
+        while (read < buffer.Length && (n = await stream.ReadAsync(buffer.AsMemory(read), ct)) > 0)
+        {
+            read += n;
+        }
+        var text = read > MaxSettingsBytes ? null : Encoding.UTF8.GetString(buffer, 0, read);
+        return IsValidSettings(text) ? text! : throw new InvalidOperationException("MeshCentral returned an unusable settings file for this device group.");
+    }
+
+    /// <summary>A usable settings file names the server and the device group and holds no binary data.</summary>
+    public static bool IsValidSettings(string? text)
+    {
+        if (string.IsNullOrEmpty(text) || Encoding.UTF8.GetByteCount(text) > MaxSettingsBytes || text.Contains('\0', StringComparison.Ordinal))
+        {
+            return false;
+        }
+        var lines = text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        return lines.Any(l => l.StartsWith("MeshServer=wss://", StringComparison.Ordinal) || l == "MeshServer=local")
+            && lines.Any(l => l.StartsWith("MeshID=0x", StringComparison.Ordinal) && l.Length > 9);
+    }
 }
 
 /// <summary>Stores the MeshCentral node id reported after the MeshAgent is installed.</summary>

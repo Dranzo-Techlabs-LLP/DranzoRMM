@@ -24,6 +24,10 @@ func defaultInstalledPaths() []string {
 	return paths
 }
 
+// defaultRestartCommand: never needed on Windows, where MeshCentral builds the
+// settings into the executable.
+func defaultRestartCommand() []string { return []string{} }
+
 // makeExecutable: nothing to do on Windows; the file inherits the ACL of the
 // agent's protected data directory (SYSTEM and Administrators only).
 func makeExecutable(string) error { return nil }

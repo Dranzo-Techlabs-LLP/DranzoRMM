@@ -32,6 +32,9 @@ All notable changes to DranzoRMM. Verification status of each item is tracked in
 - Local administrators (macOS): `_mbsetupuser`, the account macOS uses during Setup Assistant, was reported as a non-built-in administrator, so a "no extra local admins" policy failed on every Mac. macOS system accounts (`root` and names starting with `_`) are now marked built-in (agent 0.1.4).
 - Security page: "Last update" showed "Unknown" for every device patched by Windows Update or macOS itself, because only installs made through DranzoRMM were used. It now shows the later of that and the last-update date the device reports.
 
+### Fixes from onboarding World Happiness Code (2026-11-26)
+- Remote desktop on macOS (and Linux): the MeshAgent installed, but never connected, so no remote session could start. MeshCentral builds the server and device-group settings into the Windows executable only; the macOS/Linux binary arrives without them, and `meshagent -fullinstall` left no `meshagent.msh` (empty `meshagent.db`, no node id). The server now also fetches the group's settings file (`/meshsettings`) for macOS and Linux devices and sends it in the signed `mesh.install` command; the agent (0.1.5) writes it next to the binary before installing and, if the installed copy still has none, into the install folder and restarts the service (`launchctl kickstart -k system/meshagent`, `systemctl restart meshagent`). Agents older than 0.1.5 ignore the new field. Found on a World Happiness Code MacBook Air (macOS 12.7.6, Intel); that Mac was fixed with the same steps by script, then linked.
+
 ### Fixes after first LAN testing
 - Windows: single-PC installer script (`scripts/windows-kit/Install-DranzoAgent.ps1` + double-click `.cmd`) that reports every step.
 - MeshCentral: `Dranzo:Mesh:CertificateSha256` pins a self-signed MeshCentral certificate for MeshAgent downloads (normal validation otherwise).

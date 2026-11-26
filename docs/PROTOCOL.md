@@ -213,7 +213,7 @@ Concurrency: the agent runs at most 4 jobs at a time (configurable); others are 
 | `file.list` | `{path}` (requires active `files` session: `sessionId`) | `{path, entries: [{name, isDir, sizeBytes, modifiedAt, mode}], truncated}` |
 | `file.read` | `{path, uploadId, maxBytes}` → agent `PUT /agent/v1/uploads/{uploadId}` | `{sizeBytes, sha256}` |
 | `file.write` | `{path, blobId, sha256, sizeBytes, overwrite}` | `{sizeBytes}` |
-| `mesh.install` / `mesh.uninstall` | `{blobId, sha256, sizeBytes, fileName}` / `{}` | `{installed: bool, meshNodeId?}` |
+| `mesh.install` / `mesh.uninstall` | `{blobId, sha256, sizeBytes, fileName, meshSettings?}` / `{}` (`meshSettings`: the device group's `meshagent.msh`, ≤ 256 KiB, sent for macOS and Linux, whose MeshCentral binaries carry no settings; the agent writes it next to the binary before `-fullinstall` and, if the installed copy has none, into the install folder followed by a service restart) | `{installed: bool, meshNodeId?}` |
 | `agent.configure` | `{uninstallCode?: {salt: base64, iterations: int, hash: base64} \| null}` (PBKDF2-HMAC-SHA256 of the technician-set uninstall code; `null` clears it) | none |
 | `agent.uninstall` | `{}` | none (agent acks, then removes itself) |
 | `network.isolate` | `{allow: [{host, port}] (extra endpoints to keep, e.g. MeshCentral), message}` | `{allowed: string[] (resolved IPs)}` |

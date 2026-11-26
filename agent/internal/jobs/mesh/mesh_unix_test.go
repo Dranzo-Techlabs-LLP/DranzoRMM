@@ -39,6 +39,9 @@ case "$1" in
 -fullinstall)
 	if [ %d -ne 0 ]; then echo "install failed: service manager not available"; exit %d; fi
 	mkdir -p "$root/installed" && cp "$0" "$root/installed/meshagent" && chmod 700 "$root/installed/meshagent"
+	msh="$(dirname "$0")/meshagent.msh"
+	if [ -f "$msh" ]; then cp "$msh" "$root/msh-at-install"; fi
+	if [ -f "$root/copy-msh" ] && [ -f "$msh" ]; then cp "$msh" "$root/installed/meshagent.msh"; fi
 	echo "...Installing service [meshagent]"
 	echo "   -> SERVICE: meshagent [RUNNING]"
 	;;
@@ -339,5 +342,110 @@ func TestCommanderInterface(t *testing.T) {
 	}
 	if got := strings.Join(cmd.calls, "; "); got != "meshagent -fullinstall; meshagent -nodeid" {
 		t.Errorf("commands = %q", got)
+	}
+}
+
+// fakeRestart writes a stand-in for "launchctl kickstart" / "systemctl
+// restart" that records its call and exits with exitCode.
+func fakeRestart(t *testing.T, root string, exitCode int) []string {
+	t.Helper()
+	path := filepath.Join(root, "restart")
+	script := fmt.Sprintf("#!/bin/sh\necho \"restart $*\" >> %q\nexit %d\n", filepath.Join(root, "calls"), exitCode)
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil { //nolint:gosec // G306: test stand-in must be executable
+		t.Fatal(err)
+	}
+	return []string{path, "system/meshagent"}
+}
+
+func TestInstallWritesTheSettingsFile(t *testing.T) {
+	// macOS / Linux: MeshCentral's binary has no settings. They are written
+	// next to the binary before the install, and the installed copy, which
+	// "-fullinstall" did not give a settings file, gets one followed by a
+	// service restart; only then is the node id read.
+	e := newEnv(t)
+	e.opts.RestartCommand = fakeRestart(t, e.root, 0)
+	_ = os.WriteFile(filepath.Join(e.root, "nodeid"), []byte(sampleNodeID+"\n"), 0o600)
+	spec := e.installSpec(fakeAgentScript(e.root, 0))
+	spec.MeshSettings = sampleSettings
+	r := e.run(Install(e.opts), spec)
+	if res := meshResult(t, r); r.Status != protocol.StatusSucceeded || res.MeshNodeID != "node//"+sampleNodeID {
+		t.Fatalf("status = %s (%s) result = %+v", r.Status, r.Message, res)
+	}
+	if got, err := os.ReadFile(filepath.Join(e.root, "msh-at-install")); err != nil || string(got) != sampleSettings {
+		t.Errorf("settings next to the binary during the install: %q, %v", got, err)
+	}
+	installed := filepath.Join(e.root, "installed", "meshagent.msh")
+	got, err := os.ReadFile(installed)
+	if err != nil || string(got) != sampleSettings {
+		t.Fatalf("installed settings: %q, %v", got, err)
+	}
+	if fi, _ := os.Stat(installed); fi.Mode().Perm() != 0o644 {
+		t.Errorf("installed settings mode = %v", fi.Mode().Perm())
+	}
+	calls := e.calls()
+	if len(calls) != 3 || !strings.HasSuffix(calls[0], " -fullinstall") || calls[1] != "restart system/meshagent" || !strings.HasSuffix(calls[2], " -nodeid") {
+		t.Errorf("commands run:\n%s", strings.Join(calls, "\n"))
+	}
+	if _, err := os.Stat(installed + ".tmp"); !errors.Is(err, os.ErrNotExist) {
+		t.Error("temporary settings file left behind")
+	}
+
+	// Uninstall removes the downloaded copy of the settings too.
+	if r := e.run(Uninstall(e.opts), struct{}{}); r.Status != protocol.StatusSucceeded {
+		t.Fatalf("uninstall: %s (%s)", r.Status, r.Message)
+	}
+	if entries, _ := os.ReadDir(e.opts.Dir); len(entries) != 0 {
+		t.Errorf("files left after uninstall: %v", entries)
+	}
+}
+
+func TestInstallKeepsSettingsTheInstallerCopied(t *testing.T) {
+	// When "-fullinstall" copies the settings itself, nothing is rewritten
+	// and the service is not restarted.
+	e := newEnv(t)
+	e.opts.RestartCommand = fakeRestart(t, e.root, 0)
+	_ = os.WriteFile(filepath.Join(e.root, "copy-msh"), nil, 0o600)
+	_ = os.WriteFile(filepath.Join(e.root, "nodeid"), []byte(sampleNodeID+"\n"), 0o600)
+	spec := e.installSpec(fakeAgentScript(e.root, 0))
+	spec.MeshSettings = sampleSettings
+	if r := e.run(Install(e.opts), spec); r.Status != protocol.StatusSucceeded {
+		t.Fatalf("status = %s (%s)", r.Status, r.Message)
+	}
+	for _, c := range e.calls() {
+		if strings.HasPrefix(c, "restart") {
+			t.Errorf("service restarted although the settings were in place: %v", e.calls())
+		}
+	}
+}
+
+func TestInstallReportsAFailedRestart(t *testing.T) {
+	e := newEnv(t)
+	e.opts.RestartCommand = fakeRestart(t, e.root, 5)
+	spec := e.installSpec(fakeAgentScript(e.root, 0))
+	spec.MeshSettings = sampleSettings
+	r := e.run(Install(e.opts), spec)
+	if r.Status != protocol.StatusFailed || !strings.Contains(r.Message, "restart MeshAgent: exit code 5") {
+		t.Fatalf("status = %s (%s)", r.Status, r.Message)
+	}
+	// Installed (so it can be removed with mesh.uninstall), but not usable.
+	if res := meshResult(t, r); !res.Installed || res.MeshNodeID != "" {
+		t.Errorf("result = %+v", res)
+	}
+}
+
+func TestInstallWithoutSettingsDoesNotRestart(t *testing.T) {
+	// Windows-style spec (settings inside the binary): unchanged behaviour.
+	e := newEnv(t)
+	e.opts.RestartCommand = fakeRestart(t, e.root, 0)
+	if r := e.run(Install(e.opts), e.installSpec(fakeAgentScript(e.root, 0))); r.Status != protocol.StatusSucceeded {
+		t.Fatalf("status = %s (%s)", r.Status, r.Message)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, "installed", "meshagent.msh")); !errors.Is(err, os.ErrNotExist) {
+		t.Error("settings file written without settings")
+	}
+	for _, c := range e.calls() {
+		if strings.HasPrefix(c, "restart") {
+			t.Errorf("restarted: %v", e.calls())
+		}
 	}
 }

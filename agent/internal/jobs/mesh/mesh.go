@@ -33,6 +33,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dranzo/dranzormm/agent/internal/fsutil"
 	"github.com/dranzo/dranzormm/agent/internal/jobs"
@@ -45,6 +46,12 @@ import (
 const (
 	// MaxBinaryBytes bounds the MeshAgent download (real builds are 3-8 MiB).
 	MaxBinaryBytes = 256 << 20
+	// MaxSettingsBytes bounds meshagent.msh (MeshCentral's is about 32 KiB,
+	// mostly installer translations).
+	MaxSettingsBytes = 256 << 10
+	// settingsName is the MeshAgent's settings file, read from the directory
+	// of the binary.
+	settingsName = "meshagent.msh"
 	// DirName is the directory under the agent's state directory that holds
 	// the downloaded MeshAgent binary.
 	DirName = "mesh"
@@ -86,6 +93,10 @@ type Options struct {
 	NodeIDDelay    time.Duration
 	// CommandTimeout bounds one install / uninstall run.
 	CommandTimeout time.Duration
+	// RestartCommand restarts the installed MeshAgent service so it reads a
+	// settings file written after the install (nil: this OS's default; an
+	// empty slice: never restart).
+	RestartCommand []string
 }
 
 func (o Options) withDefaults() Options {
@@ -100,6 +111,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.CommandTimeout <= 0 {
 		o.CommandTimeout = defaultCommandTimeout
+	}
+	if o.RestartCommand == nil {
+		o.RestartCommand = defaultRestartCommand()
 	}
 	return o
 }
@@ -141,7 +155,30 @@ func ValidateInstall(spec *protocol.MeshInstallSpec) error {
 	if !fileNamePattern.MatchString(spec.FileName) {
 		return errors.New("invalid fileName")
 	}
+	if spec.MeshSettings != "" && !ValidSettings(spec.MeshSettings) {
+		return errors.New("invalid meshSettings")
+	}
 	return nil
+}
+
+// ValidSettings reports whether s is a usable meshagent.msh: text that names
+// the server (MeshServer=wss://... or local) and the device group
+// (MeshID=0x...).
+func ValidSettings(s string) bool {
+	if len(s) > MaxSettingsBytes || !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
+		return false
+	}
+	var server, group bool
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimRight(line, "\r")
+		switch {
+		case strings.HasPrefix(line, "MeshServer=wss://"), line == "MeshServer=local":
+			server = true
+		case strings.HasPrefix(line, "MeshID=0x") && len(line) > len("MeshID=0x"):
+			group = true
+		}
+	}
+	return server && group
 }
 
 var (
@@ -251,6 +288,13 @@ func (o Options) install(jc *jobs.JobContext) jobs.Result {
 	if err := os.Rename(tmp, binary); err != nil {
 		return jobs.Failed("store binary: %v", err)
 	}
+	// The settings file goes next to the binary, where the MeshAgent reads it
+	// during the install (macOS and Linux; Windows builds carry it inside).
+	if spec.MeshSettings != "" {
+		if err := os.WriteFile(filepath.Join(o.Dir, settingsName), []byte(spec.MeshSettings), 0o600); err != nil {
+			return jobs.Failed("store settings: %v", err)
+		}
+	}
 
 	// 2. The vendor's documented silent install. It registers the MeshAgent
 	// as a regular service under its own name.
@@ -264,6 +308,11 @@ func (o Options) install(jc *jobs.JobContext) jobs.Result {
 	if code != 0 {
 		return jobs.Result{Status: protocol.StatusFailed, ExitCode: &code, Message: fmt.Sprintf("meshagent %s: exit code %d", argInstall, code), Result: protocol.MeshResult{Installed: false}}
 	}
+	if spec.MeshSettings != "" {
+		if err := o.ensureInstalledSettings(jc, run, spec.MeshSettings); err != nil {
+			return jobs.Result{Status: protocol.StatusFailed, ExitCode: &code, Message: err.Error(), Result: protocol.MeshResult{Installed: true}}
+		}
+	}
 
 	// 3. The node id, from the installed copy (it owns the agent's identity).
 	// A fresh agent creates its identity when its service first starts, so
@@ -276,6 +325,43 @@ func (o Options) install(jc *jobs.JobContext) jobs.Result {
 		log.Warn("mesh.install: node id not available")
 	}
 	return res
+}
+
+// ensureInstalledSettings makes sure the installed MeshAgent has its settings
+// file. Without one it runs but never connects (macOS field test 2026-11-26:
+// "-fullinstall" left no meshagent.msh and an empty meshagent.db). If the
+// file is missing it is written and the service restarted to read it.
+func (o Options) ensureInstalledSettings(jc *jobs.JobContext, run Commander, settings string) error {
+	installed := o.installedBinary()
+	if installed == "" {
+		return errors.New("MeshAgent installed, but its install location was not found")
+	}
+	dest := filepath.Join(filepath.Dir(installed), settingsName)
+	if current, err := os.ReadFile(dest); err == nil && ValidSettings(string(current)) {
+		return nil
+	}
+	logger(jc).Info("mesh.install: writing the MeshAgent settings file", slog.String("path", dest))
+	tmp := dest + ".tmp"
+	if err := os.WriteFile(tmp, []byte(settings), 0o644); err != nil { //nolint:gosec // G306: same mode MeshAgent gives its own settings file; nothing secret in it
+		return fmt.Errorf("write MeshAgent settings: %w", err)
+	}
+	if err := os.Rename(tmp, dest); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("write MeshAgent settings: %w", err)
+	}
+	if len(o.RestartCommand) == 0 {
+		return nil
+	}
+	rctx, cancel := context.WithTimeout(jc.Ctx, nodeIDTimeout)
+	defer cancel()
+	code, err := run.Run(rctx, o.RestartCommand[0], o.RestartCommand[1:], jobOutput(jc))
+	if err != nil {
+		return fmt.Errorf("restart MeshAgent: %w", err)
+	}
+	if code != 0 {
+		return fmt.Errorf("restart MeshAgent: exit code %d", code)
+	}
+	return nil
 }
 
 func (o Options) nodeID(jc *jobs.JobContext, run Commander) string {
@@ -341,6 +427,7 @@ func (o Options) uninstall(jc *jobs.JobContext) jobs.Result {
 		return jobs.Result{Status: protocol.StatusFailed, ExitCode: &code, Message: fmt.Sprintf("meshagent %s: exit code %d", argUninstall, code), Result: protocol.MeshResult{Installed: stillThere}}
 	}
 	_ = os.Remove(o.binaryPath())
+	_ = os.Remove(filepath.Join(o.Dir, settingsName))
 	res := jobs.SucceededWith(protocol.MeshResult{Installed: false})
 	res.ExitCode = &code
 	return res

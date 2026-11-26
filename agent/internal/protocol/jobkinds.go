@@ -239,6 +239,10 @@ type MeshInstallSpec struct {
 	SHA256    string `json:"sha256"`
 	SizeBytes int64  `json:"sizeBytes"`
 	FileName  string `json:"fileName"`
+	// MeshSettings is the device group's meshagent.msh (server address,
+	// group and server identity). MeshCentral builds it into the Windows
+	// executable only, so the server sends it for macOS and Linux.
+	MeshSettings string `json:"meshSettings,omitempty"`
 }
 
 // MeshResult is the result of mesh.install / mesh.uninstall.

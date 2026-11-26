@@ -291,8 +291,14 @@ public static class RemoteEndpoints
             }
             StoredBlob? stored;
             string fileName;
+            // Windows executables carry their settings; macOS and Linux binaries need meshagent.msh next to them.
+            string? settings = null;
             try
             {
+                if (device.Os != "windows")
+                {
+                    settings = await mesh.DownloadSettingsAsync(group, ct);
+                }
                 var (content, name) = await mesh.DownloadAgentAsync(device.Os, device.Arch, group, ct);
                 await using (content)
                 {
@@ -309,7 +315,7 @@ public static class RemoteEndpoints
                 return Api.Error(502, "mesh_unavailable", "MeshCentral returned an empty agent.");
             }
             var created = await jobs.CreateAsync(new NewJob("Install remote desktop agent", JobKinds.MeshInstall, new JobTarget(DeviceIds: [id]),
-                new { blobId = stored.Id, sha256 = stored.Sha256, sizeBytes = stored.SizeBytes, fileName }, 900, ContentSha256: stored.Sha256), [device], c.Who.PartnerId, c.Who.UserId, c.Who.Name, ct);
+                new { blobId = stored.Id, sha256 = stored.Sha256, sizeBytes = stored.SizeBytes, fileName, meshSettings = settings }, 900, ContentSha256: stored.Sha256), [device], c.Who.PartnerId, c.Who.UserId, c.Who.Name, ct);
             await c.Audit("mesh.install", organizationId: device.OrganizationId, deviceId: id, targetType: "job", targetId: created.Job.Id, contentSha256: stored.Sha256, ct: ct);
             return Results.Created($"/api/v1/jobs/{created.Job.Id}", new { jobId = created.Job.Id });
         }).RequirePermission(Permissions.RemoteDesktop).RequireStepUp();
